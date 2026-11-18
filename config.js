@@ -28,6 +28,32 @@ const CONFIG = {
   DRIVE_TOKEN:  "VelsantCenso2026_Seguridad",          // Debe ser igual al TOKEN de drive-receptor.gs
   DRIVE_FOLDER: "Proyecto Crecimiento Estructural", // Carpeta raíz en Drive (se crea sola)
 
+  /* ---------- Seguimiento en tiempo real (se ve en monitor.html) ---------- */
+  // Requiere DRIVE_UPLOAD_URL. El verificador comparte su ubicación SOLO mientras su jornada está iniciada
+  // y la app está abierta; al cerrar la jornada se detiene. Avísales: es un monitoreo laboral.
+  TRACKING_ENABLED:     true,
+  TRACK_INTERVAL_SEC:   60,    // Cada cuántos segundos se envía la posición (30 a 120 recomendado)
+  TRACK_ALLOW_PAUSE:    true,  // false = el verificador no puede pausar el envío
+  TRACK_KEEP_SCREEN_ON: true,  // Mantiene la pantalla encendida para no perder la señal (gasta más batería)
+
+  /* ---------- Monitor (monitor.html) ---------- */
+  MONITOR_POLL_SEC: 15,                 // Cada cuántos segundos se refresca el mapa
+  MONITOR_LOGO:     "logo-vivir.png",   // Logo del panel del monitor
+  KML_LOCAL:        "zonas_verificacion.kml", // Respaldo: exporta tu mapa de My Maps a KML y súbelo con este nombre
+  MAP_CENTER: [19.72, -98.97], MAP_ZOOM: 12,
+  // Puntos de logística (los de tu panel de rutas). Se muestran en el mapa y en la pestaña "Rutas".
+  LOGISTICA: [
+    { name: "LOGISTICA 001", lat: 19.685622, lng: -98.958736 },
+    { name: "LOGISTICA 002", lat: 19.667297, lng: -98.968458 },
+    { name: "LOGISTICA 003", lat: 19.664294, lng: -98.952633 },
+    { name: "LOGISTICA 004", lat: 19.677058, lng: -98.955978 },
+    { name: "LOGISTICA 005", lat: 19.767692, lng: -98.959986 },
+    { name: "LOGISTICA 006", lat: 19.769125, lng: -98.949500 },
+    { name: "LOGISTICA 007", lat: 19.749803, lng: -98.941806 },
+    { name: "LOGISTICA 008", lat: 19.752472, lng: -98.947217 },
+    { name: "LOGISTICA 009", lat: 19.771008, lng: -99.008100 },
+  ],
+
   /* ---------- Reglas de captura ---------- */
   CLEAR_ON_CLOSE:  true,   // true = al cerrar la jornada se borran de la app los registros y fotos
                            // (el Excel de cada jornada se conserva en la app para el ZIP de Ajustes)
@@ -53,51 +79,3 @@ const CONFIG = {
     // "CAMPO 06": ["Sí", "No"],
   },
 };
-
-/* =====================================================================
-   CONFIGURACIÓN DE LA APLICACIÓN  —  EDITA SOLO ESTE ARCHIVO
-   ===================================================================== */
-const CONFIG = {
-  /* ---------- Identidad ---------- */
-  APP_NAME:     "Proyecto Crecimiento Estructural",
-  APP_SUBTITLE: "Censo municipal",
-  LOGO:         "logo.png",
-  THEME_COLOR:  "#6b1d2f",
-
-  /* ---------- Estructura del formulario ---------- */
-  DEFAULT_EXCEL: "BDD_001.xlsx",
-
-  /* ---------- Cuenta de Google Drive ---------- */
-  DRIVE_EMAIL:      "contacto.velsant@gmail.com",
-  DRIVE_UPLOAD_URL: "https://google.com",
-  DRIVE_TOKEN:      "VelsantCenso2026_Seguridad",
-  DRIVE_FOLDER:     "Proyecto Crecimiento Estructural",
-
-  /* ---------- Reglas de captura ---------- */
-  CLEAR_ON_CLOSE:     true,
-  FOLIO_DIGITS:       3,
-  REQUIRE_COORDS:     true,
-  REQUIRE_PHOTO:      true,
-  REQUIRE_ALL_FIELDS: false,
-  REQUIRED_FIELDS:    [],
-  PHOTO_MAX_PX:       1600,
-  PHOTO_QUALITY:      0.8,
-  FIELD_TYPES:        {},
-  FIELD_OPTIONS:      {},
-
-  /* ---------- NUEVO: Seguimiento en Tiempo Real y KML ---------- */
-  KML_FILE: "zonas_verificacion.kml", // Nombre exacto de tu archivo KML en el repositorio
-  FIREBASE_CONFIG: {
-    apiKey: "TU_API_KEY_DE_FIREBASE",
-    databaseURL: "https://firebaseio.com",
-    projectId: "TU-PROYECTO"
-  }
-};
-  /* ---------- Seguimiento en Tiempo Real y KML ---------- */
-  KML_FILE: "zonas_verificacion.kml",
-  SUPERVISOR_KEY: "CLAVSUP2026", // Debe coincidir con tus reglas de Firebase
-  FIREBASE_CONFIG: {
-    apiKey: "TU_API_KEY_DE_FIREBASE",
-    databaseURL: "https://firebaseio.com",
-    projectId: "TU-PROYECTO"
-  }

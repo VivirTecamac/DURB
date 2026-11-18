@@ -39,3 +39,13 @@ Para cambiar de cuenta: repite los pasos con la otra cuenta y cambia `DRIVE_EMAI
 - Al cerrar la jornada con éxito, la app borra de su memoria los registros y fotos (`CLEAR_ON_CLOSE` en config.js). Se conserva el contador de folios (no se repiten claves) y una copia del Excel de cada jornada.
 - Ajustes (⚙): **Descargar TODO** = un ZIP con todos los Excel de jornadas cerradas, el de la jornada en curso y las fotos que aún estén en la app.
 - Ajustes (⚙): descargar Excel/CSV de la jornada o de todos los registros.
+
+## Seguimiento en tiempo real de verificadores (monitor.html)
+- **Verificador:** al abrir su primer registro de la jornada la app empieza a compartir su ubicación cada `TRACK_INTERVAL_SEC` segundos
+  (con la pantalla encendida y la app abierta; el navegador no puede rastrear con la pantalla apagada). Al cerrar la jornada se detiene.
+  Puede pausar con el botón de la tarjeta de inicio (se desactiva con `TRACK_ALLOW_PAUSE: false`). Avísales que es un monitoreo laboral.
+- **Supervisor:** abre `monitor.html` (misma carpeta/repositorio). Pide la clave de monitoreo (`MONITOR_TOKEN` del receptor; se guarda en ese dispositivo).
+  Muestra tus polígonos de My Maps, los puntos de logística, a cada verificador (verde = en línea, ámbar = sin señal reciente, gris = sin conexión),
+  sus registros del día, recorrido y precisión GPS. Pestaña "Rutas" = tus 9 destinos de navegación.
+- **Receptor:** pega el nuevo `drive-receptor.gs`, cambia `MONITOR_TOKEN` por una clave propia y publica **Nueva versión** (ver arriba).
+  El mapa de My Maps debe estar compartido como "Cualquier persona con el enlace". Si no carga, exporta el KML y súbelo como `zonas_verificacion.kml`.

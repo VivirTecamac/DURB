@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Monitor de verificadores</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+:root{--dorado:#B8860B;--dorado-claro:#D4AF37;--azul:#0b57d0;--bg:#f8f9fa;--ink:#202124;--muted:#6b6b6b;--line:#e0e0e0;
+  --ok:#2e9e5b;--warn:#e69a00;--off:#8c8c8c;--err:#b3261e}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%}
+body{font-family:Verdana,Geneva,"Segoe UI",sans-serif;background:var(--bg);color:var(--ink);display:flex;height:100dvh;overflow:hidden}
+.sidebar{width:380px;background:#fff;box-shadow:4px 0 15px rgba(0,0,0,.08);display:flex;flex-direction:column;z-index:1000;min-height:0}
+.head{padding:8px 12px;border-bottom:2px solid var(--dorado-claro);display:flex;align-items:center;gap:10px}
+.head img{width:104px;height:auto;flex:none}
+.head .t{flex:1;text-align:center}
+.head .l1{font-size:.66rem;margin:0}.head .l2{font-size:.8rem;font-weight:bold;color:var(--dorado);margin:1px 0 0}
+.head h1{font-size:.88rem;color:var(--azul);margin:3px 0 0}
+.status{padding:6px 12px;font-size:.72rem;color:var(--muted);display:flex;justify-content:space-between;gap:8px;border-bottom:1px solid var(--line)}
+.status b{color:var(--ink)}
+.tabs{display:flex;border-bottom:1px solid var(--line)}
+.tabs button{flex:1;padding:10px 4px;border:0;background:#fff;font:inherit;font-size:.78rem;font-weight:bold;color:var(--muted);border-bottom:3px solid transparent}
+.tabs button.on{color:var(--azul);border-bottom-color:var(--dorado-claro)}
+.panel{flex:1;overflow:auto;padding:8px 10px calc(24px + env(safe-area-inset-bottom));min-height:0}
+.opts{display:flex;flex-wrap:wrap;gap:10px;font-size:.72rem;padding:4px 2px 8px}
+.opts label{display:flex;align-items:center;gap:5px}
+.card{display:flex;align-items:center;gap:10px;padding:9px 10px;margin-bottom:6px;border:1px solid var(--line);border-left:4px solid var(--off);
+  border-radius:10px;background:#fff;cursor:pointer}
+.card.ok{border-left-color:var(--ok)}.card.warn{border-left-color:var(--warn)}
+.card b{font-size:.8rem}.card small{display:block;font-size:.68rem;color:var(--muted)}
+.dot{width:12px;height:12px;border-radius:50%;background:var(--off);flex:none}
+.ok .dot{background:var(--ok)}.warn .dot{background:var(--warn)}
+.card .n{margin-left:auto;text-align:right;font-size:.66rem;color:var(--muted);white-space:nowrap}
+.card .n strong{display:block;font-size:1rem;color:var(--azul)}
+.btn-ruta{display:flex;justify-content:space-between;align-items:center;padding:9px 10px;margin-bottom:6px;background:#fff;color:#000;text-decoration:none;
+  border-radius:10px;font-size:.74rem;font-weight:bold;border:1px solid var(--line);border-left:4px solid var(--dorado-claro)}
+.btn-ruta small{display:block;font-size:.62rem;font-weight:bold}
+.btn-ruta:active{background:var(--dorado);color:#fff}
+.map{flex:1;position:relative;min-width:0}
+#map{position:absolute;inset:0;background:#e5e3df}
+.msg{font-size:.76rem;color:var(--muted);padding:6px 2px}
+.msg.err{color:var(--err)}
+button.b{font:inherit;font-size:.74rem;font-weight:bold;padding:8px 10px;border-radius:9px;border:1.5px solid var(--azul);background:#fff;color:var(--azul)}
+.pin{width:34px;height:34px;border-radius:50%;background:var(--off);border:3px solid #fff;color:#fff;font:bold 11px/28px Verdana,sans-serif;text-align:center;box-shadow:0 2px 6px rgba(0,0,0,.45)}
+.pin.ok{background:var(--ok)}.pin.warn{background:var(--warn)}
+.flag{font-size:20px;line-height:1;filter:drop-shadow(0 1px 2px rgba(0,0,0,.5))}
+#gate{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:3000;display:flex;align-items:center;justify-content:center;padding:20px}
+#gate form{background:#fff;border-radius:16px;padding:20px;width:min(92vw,380px)}
+#gate h2{margin:0 0 8px;font-size:1rem;color:var(--azul)}
+#gate input{width:100%;font-size:16px;padding:12px;border:1.5px solid var(--line);border-radius:10px;margin:8px 0}
+#gate .b{width:100%;padding:12px;background:var(--azul);color:#fff}
+[hidden]{display:none!important}
+@media (max-width:768px){
+  body{flex-direction:column-reverse}
+  .sidebar{width:100%;height:46vh}
+  .map{height:54vh;flex:none}
+  .head img{width:78px}
+}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="head">
+    <img id="logo" alt="Logo">
+    <div class="t">
+      <p class="l1">Empresa de Participación Mayoritaria</p>
+      <p class="l2">VIVIR TECÁMAC S.A. de C.V.</p>
+      <h1>📡 Monitor de verificadores</h1>
+    </div>
+  </div>
+  <div class="status"><span id="stTime">Conectando…</span><span id="stCount"></span></div>
+  <div class="tabs">
+    <button id="tabV" class="on">Verificadores</button>
+    <button id="tabR">Rutas</button>
+  </div>
+
+  <div class="panel" id="panelV">
+    <div class="opts">
+      <label><input type="checkbox" id="optZones" checked> Zonas</label>
+      <label><input type="checkbox" id="optTrail"> Recorrido</label>
+      <label><input type="checkbox" id="optAcc"> Precisión GPS</label>
+      <button class="b" id="btnFit">Ver todo</button>
+    </div>
+    <div id="msg" class="msg"></div>
+    <div id="list"></div>
+    <div id="kmlBox" class="msg" hidden>
+      No se pudieron cargar las zonas automáticamente. Puedes cargar un archivo KML:
+      <input type="file" id="kmlFile" accept=".kml,.xml">
+    </div>
+  </div>
+
+  <div class="panel" id="panelR" hidden>
+    <div class="msg">Toca un destino para iniciar la navegación en Google Maps.</div>
+    <div id="rutas"></div>
+  </div>
+</aside>
+
+<div class="map"><div id="map"></div></div>
+
+<div id="gate" hidden>
+  <form id="gateForm">
+    <h2>Acceso al monitor</h2>
+    <div class="msg" style="padding:0">Escribe la clave de monitoreo.</div>
+    <input id="gateInput" type="password" autocomplete="current-password" placeholder="Clave de monitoreo">
+    <div class="msg err" id="gateErr"></div>
+    <button class="b" type="submit">Entrar</button>
+  </form>
+</div>
+
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="config.js"></script>
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const URL_API = CONFIG.DRIVE_UPLOAD_URL;
+const TOKEN_KEY = "pce_monitor_token";
+const store = { get: (k) => { try { return localStorage.getItem(k); } catch { return null; } }, set: (k, v) => { try { localStorage.setItem(k, v); } catch {} }, del: (k) => { try { localStorage.removeItem(k); } catch {} } };
+
+/* ============================== MAPA ============================== */
+$("#logo").src = CONFIG.MONITOR_LOGO || CONFIG.LOGO;
+const map = L.map("map", { zoomControl: true }).setView(CONFIG.MAP_CENTER, CONFIG.MAP_ZOOM);
+const calles = L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 19, attribution: "© OpenStreetMap" }).addTo(map);
+const satelite = L.tileLayer("https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}", { maxZoom: 19, attribution: "Imágenes © Esri" });
+L.control.layers({ "Calles": calles, "Satélite": satelite }, null, { position: "topright" }).addTo(map);
+
+const zonesLayer = L.featureGroup().addTo(map);
+const logLayer = L.featureGroup().addTo(map);
+const vLayer = L.featureGroup().addTo(map);
+const trailLayer = L.featureGroup();
+const accLayer = L.featureGroup();
+
+/* ---- Puntos de logística + pestaña Rutas ---- */
+const navUrl = (p) => `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving`;
+(CONFIG.LOGISTICA || []).forEach((p) => {
+  L.marker([p.lat, p.lng], { icon: L.divIcon({ className: "", html: '<div class="flag">🚚</div>', iconSize: [22, 22], iconAnchor: [11, 11] }) })
+    .bindPopup(`<b>${esc(p.name)}</b><br><a href="${navUrl(p)}" target="_blank" rel="noopener">Iniciar navegación ➔</a>`).addTo(logLayer);
+});
+$("#rutas").innerHTML = (CONFIG.LOGISTICA || []).map((p) =>
+  `<a class="btn-ruta" href="${navUrl(p)}" target="_blank" rel="noopener"><div>${esc(p.name)}<small>Iniciar navegación GPS</small></div><span>➔</span></a>`).join("");
+
+/* ============================ KML (zonas) ========================== */
+function kmlColor(c) {   // KML usa aabbggrr
+  c = (c || "").trim(); if (!/^[0-9a-fA-F]{8}$/.test(c)) return null;
+  return { color: "#" + c.slice(6, 8) + c.slice(4, 6) + c.slice(2, 4), opacity: parseInt(c.slice(0, 2), 16) / 255 };
+}
+function plainText(html) {
+  const t = new DOMParser().parseFromString(String(html || "").replace(/<br\s*\/?>/gi, "\n"), "text/html").body.textContent || "";
+  return esc(t.trim()).replace(/\n/g, "<br>");
+}
+const coords = (txt) => txt.trim().split(/\s+/).map((s) => s.split(",").map(Number)).filter((a) => a.length >= 2 && isFinite(a[0]) && isFinite(a[1])).map((a) => [a[1], a[0]]);
+
+function drawKml(text) {
+  const doc = new DOMParser().parseFromString(text, "application/xml");
+  if (doc.querySelector("parsererror")) throw new Error("El KML no es válido");
+  const styles = {};
+  doc.querySelectorAll("Style").forEach((s) => {
+    const id = s.getAttribute("id"); if (!id) return;
+    styles[id] = {
+      line: kmlColor(s.querySelector("LineStyle > color")?.textContent),
+      width: parseFloat(s.querySelector("LineStyle > width")?.textContent) || 2,
+      fill: kmlColor(s.querySelector("PolyStyle > color")?.textContent),
+      noFill: s.querySelector("PolyStyle > fill")?.textContent.trim() === "0",
+      icon: kmlColor(s.querySelector("IconStyle > color")?.textContent),
+    };
+  });
+  doc.querySelectorAll("StyleMap").forEach((m) => {
+    m.querySelectorAll("Pair").forEach((p) => {
+      if (p.querySelector("key")?.textContent.trim() !== "normal") return;
+      const u = (p.querySelector("styleUrl")?.textContent || "").trim().replace(/^#/, "");
+      if (styles[u]) styles[m.getAttribute("id")] = styles[u];
+    });
+  });
+  zonesLayer.clearLayers(); let n = 0;
+  doc.querySelectorAll("Placemark").forEach((pm) => {
+    const name = pm.querySelector("name")?.textContent || "", desc = pm.querySelector("description")?.textContent || "";
+    const st = styles[(pm.querySelector("styleUrl")?.textContent || "").trim().replace(/^#/, "")] || {};
+    const popup = `<b>${esc(name)}</b>${desc ? "<br>" + plainText(desc) : ""}`;
+    const color = st.line?.color || "#3388ff";
+    pm.querySelectorAll("Polygon").forEach((pg) => {
+      const rings = [...pg.querySelectorAll("outerBoundaryIs coordinates, innerBoundaryIs coordinates")].map((c) => coords(c.textContent)).filter((r) => r.length > 2);
+      if (!rings.length) return;
+      L.polygon(rings, { color, weight: st.width, opacity: st.line?.opacity ?? 1, fillColor: st.fill?.color || color, fillOpacity: st.noFill ? 0 : (st.fill?.opacity ?? 0.3) }).bindPopup(popup).addTo(zonesLayer); n++;
+    });
+    pm.querySelectorAll("LineString").forEach((ls) => {
+      const pts = coords(ls.querySelector("coordinates")?.textContent || ""); if (pts.length < 2) return;
+      L.polyline(pts, { color, weight: st.width, opacity: st.line?.opacity ?? 1 }).bindPopup(popup).addTo(zonesLayer); n++;
+    });
+    pm.querySelectorAll("Point").forEach((pt) => {
+      const c = coords(pt.querySelector("coordinates")?.textContent || "")[0]; if (!c) return;
+      L.circleMarker(c, { radius: 6, color: "#fff", weight: 2, fillColor: st.icon?.color || "#d93025", fillOpacity: 1 }).bindPopup(popup).addTo(zonesLayer); n++;
+    });
+  });
+  return n;
+}
+
+async function loadZones() {
+  const tries = [];
+  if (URL_API) tries.push(async () => {
+    const j = await api("kml"); if (!j.ok) throw new Error(j.error); return j.kml;
+  });
+  if (CONFIG.KML_LOCAL) tries.push(async () => { const r = await fetch(CONFIG.KML_LOCAL, { cache: "no-store" }); if (!r.ok) throw new Error("sin archivo"); return r.text(); });
+  for (const t of tries) {
+    try { const n = drawKml(await t()); if (n) { $("#kmlBox").hidden = true; fitAll(true); return; } } catch (e) { console.warn("KML:", e.message); }
+  }
+  $("#kmlBox").hidden = false;
+}
+$("#kmlFile").onchange = async (e) => {
+  const f = e.target.files[0]; if (!f) return;
+  try { drawKml(await f.text()); $("#kmlBox").hidden = true; fitAll(true); } catch (err) { alert(err.message); }
+};
+$("#optZones").onchange = (e) => (e.target.checked ? zonesLayer.addTo(map) : map.removeLayer(zonesLayer));
+
+/* ============================ API / acceso ========================== */
+let token = store.get(TOKEN_KEY) || "";
+function askToken(err) {
+  return new Promise((res) => {
+    $("#gate").hidden = false; $("#gateErr").textContent = err || ""; $("#gateInput").value = ""; setTimeout(() => $("#gateInput").focus(), 50);
+    $("#gateForm").onsubmit = (e) => { e.preventDefault(); const v = $("#gateInput").value.trim(); if (!v) return; token = v; $("#gate").hidden = true; res(); };
+  });
+}
+async function api(action) {
+  const r = await fetch(`${URL_API}?action=${action}&token=${encodeURIComponent(token)}`, { cache: "no-store" });
+  return r.json();
+}
+
+/* =========================== Verificadores ========================= */
+const marks = {}, trails = {}, accs = {};
+let firstFit = true, timer = null, lastOk = null;
+
+const ago = (ms) => { const s = Math.max(0, Math.round(ms / 1000)); if (s < 60) return `hace ${s} s`; const m = Math.round(s / 60); if (m < 60) return `hace ${m} min`; const h = Math.floor(m / 60); return `hace ${h} h ${m % 60} min`; };
+const stateOf = (it, age) => (it.status === "off" || it.lat == null ? "off" : age < 150000 ? "ok" : age < 600000 ? "warn" : "off");
+const label = { ok: "En línea", warn: "Sin señal reciente", off: "Sin conexión" };
+
+function popupHtml(it, age, st) {
+  return `<b>${esc(it.name || it.id)}</b> (${esc(it.id)})<br>${label[st]} · ${ago(age)}<br>Registros hoy: <b>${it.registros || 0}</b>` +
+    (it.lat != null ? `<br>Precisión: ±${it.acc ?? "?"} m<br><a target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${it.lat},${it.lng}">Abrir en Google Maps</a>` : "");
+}
+
+function render(items, now) {
+  const list = items.map((it) => { const age = now - it.ts; return { it, age, st: stateOf(it, age) }; }).sort((a, b) => a.age - b.age);
+  const seen = new Set();
+  list.forEach(({ it, age, st }) => {
+    seen.add(it.id);
+    if (it.lat == null) return;
+    const ll = [it.lat, it.lng];
+    const icon = L.divIcon({ className: "", html: `<div class="pin ${st}">${esc(String(it.id).slice(0, 4))}</div>`, iconSize: [34, 34], iconAnchor: [17, 17], popupAnchor: [0, -16] });
+    if (marks[it.id]) { marks[it.id].setLatLng(ll).setIcon(icon); marks[it.id].setPopupContent(popupHtml(it, age, st)); }
+    else marks[it.id] = L.marker(ll, { icon }).bindPopup(popupHtml(it, age, st)).addTo(vLayer);
+    // Recorrido (solo mientras el monitor está abierto)
+    const tr = (trails[it.id] ||= { pts: [], line: L.polyline([], { color: "#0b57d0", weight: 3, opacity: 0.7 }).addTo(trailLayer) });
+    const last = tr.pts[tr.pts.length - 1];
+    if (!last || last[0] !== it.lat || last[1] !== it.lng) { tr.pts.push(ll); tr.line.setLatLngs(tr.pts); }
+    // Círculo de precisión
+    if (it.acc) { if (accs[it.id]) accs[it.id].setLatLng(ll).setRadius(it.acc); else accs[it.id] = L.circle(ll, { radius: it.acc, color: "#0b57d0", weight: 1, fillOpacity: 0.08 }).addTo(accLayer); }
+  });
+  Object.keys(marks).forEach((id) => { if (!seen.has(id)) { vLayer.removeLayer(marks[id]); delete marks[id]; } });
+
+  $("#list").innerHTML = list.map(({ it, age, st }) =>
+    `<div class="card ${st}" data-id="${esc(it.id)}"><span class="dot"></span><div><b>${esc(it.name || it.id)}</b><small>${esc(it.id)} · ${label[st]} · ${ago(age)}</small></div>` +
+    `<div class="n"><strong>${it.registros || 0}</strong>registros</div></div>`).join("");
+  $("#list").querySelectorAll(".card").forEach((c) => (c.onclick = () => {
+    const m = marks[c.dataset.id]; if (!m) return; map.flyTo(m.getLatLng(), Math.max(map.getZoom(), 16)); m.openPopup();
+    if (innerWidth <= 768) window.scrollTo(0, 0);
+  }));
+  const active = list.filter((x) => x.st === "ok").length;
+  $("#stCount").innerHTML = `<b>${active}</b> en línea de <b>${list.length}</b>`;
+  $("#msg").textContent = list.length ? "" : "Aún no hay verificadores reportando. Aparecerán cuando inicien su jornada.";
+  if (firstFit && Object.keys(marks).length) { firstFit = false; fitAll(); }
+}
+
+function fitAll(zonesOnlyOk) {
+  const g = L.featureGroup([zonesLayer, vLayer]);
+  const b = g.getBounds(); if (b.isValid()) map.fitBounds(b.pad(0.1), { maxZoom: 16 });
+}
+$("#btnFit").onclick = () => fitAll();
+$("#optTrail").onchange = (e) => (e.target.checked ? trailLayer.addTo(map) : map.removeLayer(trailLayer));
+$("#optAcc").onchange = (e) => (e.target.checked ? accLayer.addTo(map) : map.removeLayer(accLayer));
+
+async function poll() {
+  try {
+    const j = await api("positions");
+    if (!j.ok) {
+      if (/clave/i.test(j.error || "")) { store.del(TOKEN_KEY); clearInterval(timer); timer = null; await askToken("Clave incorrecta. Inténtalo de nuevo."); start(); return false; }
+      throw new Error(j.error);
+    }
+    store.set(TOKEN_KEY, token); lastOk = Date.now();
+    render(j.items, j.now);
+    $("#stTime").textContent = "Actualizado " + new Date().toTimeString().slice(0, 8);
+  } catch (e) {
+    $("#stTime").textContent = "⚠ Sin conexión con el servidor";
+    $("#msg").className = "msg err"; $("#msg").textContent = String(e.message || e);
+    return;
+  }
+  $("#msg").className = "msg";
+}
+
+async function start() {
+  if (!URL_API) { $("#stTime").textContent = "Falta DRIVE_UPLOAD_URL en config.js"; return; }
+  if (!token) await askToken();
+  if ((await poll()) === false) return;   // clave incorrecta: start() ya se volvió a lanzar
+  loadZones();
+  clearInterval(timer); timer = setInterval(poll, Math.max(5, CONFIG.MONITOR_POLL_SEC || 15) * 1000);
+}
+
+/* Pestañas */
+$("#tabV").onclick = () => { $("#tabV").classList.add("on"); $("#tabR").classList.remove("on"); $("#panelV").hidden = false; $("#panelR").hidden = true; };
+$("#tabR").onclick = () => { $("#tabR").classList.add("on"); $("#tabV").classList.remove("on"); $("#panelR").hidden = false; $("#panelV").hidden = true; };
+
+start();
+</script>
+</body>
+</html>

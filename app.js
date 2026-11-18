@@ -13,7 +13,7 @@ const nowTime = () => { const d = new Date(); return `${pad(d.getHours(), 2)}:${
 /* ------------------------------------------------------------------ */
 /*  Estado + IndexedDB                                                 */
 /* ------------------------------------------------------------------ */
-const S = { columns: [], verifier: null, counters: {}, jornada: null, closed: {}, records: [], draft: null };
+const S = { columns: [], verifier: null, counters: {}, jornada: null, closed: {}, records: [], draft: null, tracking: false };
 let db;
 
 function openDB() {
@@ -37,7 +37,7 @@ const dbAll = (s) => rq(st(s).getAll());
 const dbPut = (s, v, k) => rq(st(s, "readwrite").put(v, k));
 const saveMeta = () => Promise.all([
   dbPut("meta", S.columns, "columns"), dbPut("meta", S.verifier, "verifier"), dbPut("meta", S.counters, "counters"),
-  dbPut("meta", S.jornada, "jornada"), dbPut("meta", S.closed, "closed"),
+  dbPut("meta", S.jornada, "jornada"), dbPut("meta", S.closed, "closed"), dbPut("meta", S.tracking, "tracking"),
 ]);
 
 async function loadState() {
@@ -46,6 +46,7 @@ async function loadState() {
   S.counters = (await dbGet("meta", "counters")) || {};
   S.jornada = (await dbGet("meta", "jornada")) || null;
   S.closed = (await dbGet("meta", "closed")) || {};
+  S.tracking = !!(await dbGet("meta", "tracking"));
   S.records = (await dbAll("records")).sort((a, b) => a.savedAt.localeCompare(b.savedAt));
 }
 
@@ -263,6 +264,7 @@ async function goHome() {
   const b = $("#homeBanner");
   if (!CONFIG.DRIVE_UPLOAD_URL) { b.hidden = false; b.textContent = `Envío automático a Drive (${CONFIG.DRIVE_EMAIL}) sin configurar. Al cerrar la jornada los archivos se guardarán en el teléfono y podrás compartirlos manualmente.`; }
   else b.hidden = true;
+  updateTrackUI();
   show("home");
 }
 
@@ -275,6 +277,7 @@ const optsOf = (h) => { const k = Object.keys(CONFIG.FIELD_OPTIONS).find((x) => 
 const isRequired = (h) => CONFIG.REQUIRE_ALL_FIELDS || CONFIG.REQUIRED_FIELDS.some((x) => key(x) === key(h));
 
 function openForm() {
+  if (!T.on && !S.jornada) startTracking();
   S.draft = { clave: nextClave(), coords: "", acc: null, photos: [] };
   const f = $("#form");
   let html = `<div class="card">`;
@@ -359,7 +362,7 @@ async function saveRecord() {
       t.oncomplete = res; t.onerror = t.onabort = () => rej(t.error);
     });
     S.records.push(rec); S.counters = counters; S.jornada = jornada;
-    toast(`Registro ${rec.clave} guardado`, "ok"); closeForm();
+    toast(`Registro ${rec.clave} guardado`, "ok"); closeForm(); if (T.on) sendPing("on");
   } catch (err) { toast("No se pudo guardar: " + (err?.message || "error de almacenamiento"), "err"); }
   btn.disabled = false;
 }
@@ -381,6 +384,59 @@ async function showRecord(clave) {
   $("#recPhotos").innerHTML = ph.filter(Boolean).map((p) => `<div class="thumb"><img src="${URL.createObjectURL(p.blob)}" alt=""><em>${esc(p.name)}</em></div>`).join("");
   $("#dlgRec").showModal();
 }
+
+/* ------------------------------------------------------------------ */
+/*  Seguimiento en tiempo real (lo ve monitor.html)                    */
+/* ------------------------------------------------------------------ */
+const T = { on: false, watch: null, timer: null, wake: null, last: null, lastSent: 0, err: null, sentOk: null };
+const trackAvailable = () => CONFIG.TRACKING_ENABLED && !!CONFIG.DRIVE_UPLOAD_URL && !!navigator.geolocation;
+
+async function sendPing(status) {
+  if (!CONFIG.DRIVE_UPLOAD_URL || !S.verifier || (status === "on" && !T.last)) return;
+  const p = T.last || {};
+  try {
+    const r = await fetch(CONFIG.DRIVE_UPLOAD_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ token: CONFIG.DRIVE_TOKEN, action: "ping", id: S.verifier.initials, name: S.verifier.name, status,
+        lat: p.lat, lng: p.lng, acc: p.acc, registros: jornadaRecords().length }) });
+    const j = await r.json(); if (!j.ok) throw new Error(j.error);
+    T.lastSent = Date.now(); T.sentOk = true;
+  } catch { T.sentOk = false; }
+  updateTrackUI();
+}
+async function keepAwake() {
+  try {
+    if (CONFIG.TRACK_KEEP_SCREEN_ON && T.on && "wakeLock" in navigator && !T.wake) {
+      T.wake = await navigator.wakeLock.request("screen"); T.wake.addEventListener("release", () => (T.wake = null));
+    }
+  } catch {}
+}
+function startTracking() {
+  if (T.on || !trackAvailable() || !S.verifier) return;
+  T.on = true; S.tracking = true; dbPut("meta", true, "tracking");
+  T.watch = navigator.geolocation.watchPosition((p) => {
+    const first = !T.last; T.err = null;
+    T.last = { lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), acc: Math.round(p.coords.accuracy) };
+    if (first) sendPing("on"); updateTrackUI();
+  }, (e) => { T.err = e; updateTrackUI(); }, { enableHighAccuracy: true, maximumAge: 15000, timeout: 30000 });
+  T.timer = setInterval(() => sendPing("on"), Math.max(15, CONFIG.TRACK_INTERVAL_SEC) * 1000);
+  keepAwake(); updateTrackUI();
+}
+async function stopTracking() {
+  if (!T.on) return;
+  navigator.geolocation.clearWatch(T.watch); clearInterval(T.timer); T.on = false; S.tracking = false;
+  await dbPut("meta", false, "tracking");
+  try { await T.wake?.release(); } catch {} T.wake = null;
+  await sendPing("off"); T.last = null; updateTrackUI();
+}
+function updateTrackUI() {
+  const c = $("#trackCard"); if (!c) return; c.hidden = !trackAvailable(); if (c.hidden) return;
+  const st = $("#trackState"), sub = $("#trackSub"), b = $("#btnTrack");
+  if (!T.on) { st.textContent = "📡 Ubicación NO compartida"; sub.textContent = "La central no ve tu posición."; b.textContent = "▶ Iniciar jornada y compartir ubicación"; b.hidden = false; return; }
+  st.textContent = T.err ? "⚠ Sin ubicación" : "📡 Ubicación compartida con la central";
+  sub.textContent = T.err ? "Activa el permiso de ubicación del navegador." : T.sentOk === false ? "Sin conexión: se reintentará." : T.lastSent ? "Último envío: " + new Date(T.lastSent).toTimeString().slice(0, 5) : "Obteniendo señal GPS…";
+  b.textContent = "⏸ Pausar"; b.hidden = !CONFIG.TRACK_ALLOW_PAUSE;
+}
+document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && T.on) { keepAwake(); sendPing("on"); } });
 
 /* ------------------------------------------------------------------ */
 /*  Descargas, Drive y cierre de jornada                               */
@@ -464,7 +520,7 @@ async function closeJornada() {
       if (navigator.canShare?.({ files: test })) { share.hidden = false; share.onclick = () => navigator.share({ files: test, title: base }).catch(() => {}); }
     }
     bar.style.width = "100%";
-    S.closed[S.jornada] = n + 1; S.jornada = null; closeState = null; await saveMeta();
+    S.closed[S.jornada] = n + 1; S.jornada = null; closeState = null; await stopTracking(); await saveMeta();
     await new Promise((res, rej) => {
       const t = db.transaction(["records", "photos", "archive"], "readwrite");
       t.objectStore("archive").put({ name: base + ".xlsx", blob: xlsx, savedAt: new Date().toISOString() });
@@ -544,88 +600,10 @@ async function boot() {
   initSettings();
   $("#btnNew").onclick = openForm; $("#btnList").onclick = openList; $("#btnListBack").onclick = goHome; $("#btnClose").onclick = closeJornada;
   $("#btnSave").onclick = saveRecord;
+  $("#btnTrack").onclick = () => (T.on ? stopTracking() : startTracking());
   $("#btnCancel").onclick = () => { if (!formDirty() || confirm("¿Descartar este registro? Se perderán los datos capturados.")) closeForm(); };
 
-  if (!S.columns.length || !S.verifier) initSetup(); else goHome();
-  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
-}
-boot();
-/* ------------------------------------------------------------------ */
-/*  NUEVO: Rastreo GPS en Tiempo Real hacia Firebase                   */
-/* ------------------------------------------------------------------ */
-let liveDb = null;
-let watchId = null;
-
-function initLiveTracking() {
-  if (!CONFIG.FIREBASE_CONFIG?.databaseURL || typeof firebase === "undefined") return;
-  try {
-    if (!firebase.apps.length) firebase.initializeApp(CONFIG.FIREBASE_CONFIG);
-    liveDb = firebase.database();
-    firebase.auth().signInAnonymously()
-      .then(() => startGpsStream())
-      .catch((e) => console.warn("Auth en espera:", e));
-  } catch (e) {
-    console.warn("Firebase en espera de conexión:", e);
-  }
-}
-
-function startGpsStream() {
-  if (!liveDb || !S.verifier || !("geolocation" in navigator) || watchId !== null) return;
-
-  watchId = navigator.geolocation.watchPosition(
-    (pos) => {
-      if (!navigator.onLine || !firebase.auth().currentUser) return;
-      const id = S.verifier.initials;
-      const ruta = `acceso_supervisor/${CONFIG.SUPERVISOR_KEY}/verificadores/${id}`;
-      liveDb.ref(ruta).set({
-        nombre: S.verifier.name,
-        iniciales: id,
-        lat: pos.coords.latitude,
-        lng: pos.coords.longitude,
-        precision: Math.round(pos.coords.accuracy),
-        registros_hoy: jornadaRecords().length,
-        ultimo_folio: S.records.length ? S.records[S.records.length - 1].clave : "Ninguno",
-        hora: nowTime(),
-        fecha: today()
-      });
-    },
-    (err) => console.warn("GPS segundo plano:", err.message),
-    { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
-  );
-}
-
-
-/* ------------------------------------------------------------------ */
-/*  Arranque (Reemplaza el boot() al final de tu app.js)               */
-/* ------------------------------------------------------------------ */
-async function boot() {
-  document.title = CONFIG.APP_NAME; $("#cfgDefault").textContent = `Recargar estructura desde ${CONFIG.DEFAULT_EXCEL || "el Excel por omisión"}`; $("#cfgDefault").hidden = !CONFIG.DEFAULT_EXCEL;
-  $("#appName").textContent = CONFIG.APP_NAME; $("#appSub").textContent = CONFIG.APP_SUBTITLE;
-  $("#logo").src = CONFIG.LOGO;
-  document.querySelector('meta[name="theme-color"]').content = CONFIG.THEME_COLOR;
-  document.documentElement.style.setProperty("--brand", CONFIG.THEME_COLOR);
-  addEventListener("online", netChip); addEventListener("offline", netChip); netChip();
-
-  try { db = await openDB(); await loadState(); }
-  catch { document.querySelector("main").innerHTML = '<div class="card"><h2>Almacenamiento no disponible</h2><p>Esta aplicación necesita guardar datos en el navegador. Sal del modo incógnito o abre la app desde Chrome/Safari.</p></div>'; return; }
-  if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
-
-  initSettings();
-  $("#btnNew").onclick = openForm; $("#btnList").onclick = openList; $("#btnListBack").onclick = goHome; $("#btnClose").onclick = closeJornada;
-  $("#btnSave").onclick = saveRecord;
-  $("#btnCancel").onclick = () => { if (!formDirty() || confirm("¿Descartar este registro? Se perderán los datos capturados.")) closeForm(); };
-
-  // Inicia el rastreo si el verificador ya está registrado
-  initLiveTracking();
-
-  if (!S.columns.length || !S.verifier) {
-    initSetup();
-    // Si es la primera vez que entra, activa el GPS justo al pulsar "Comenzar"
-    const origStart = $("#btnStart").onclick;
-    $("#btnStart").onclick = async () => { await origStart(); initLiveTracking(); };
-  } else {
-    goHome();
-  }
+  if (!S.columns.length || !S.verifier) initSetup(); else { goHome(); if (S.tracking) startTracking(); }
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 boot();

@@ -1,6 +1,6 @@
 // Service worker: permite abrir la app sin internet (red primero, caché de respaldo)
 const CACHE = "pce-v2";
-const SHELL = ["./", "index.html", "app.js", "config.js", "logo.png", "manifest.json", "icon-192.png", "icon-512.png"];
+const SHELL = ["./", "index.html", "app.js", "config.js", "logo.png", "manifest.json", "icon-192.png", "icon-512.png", "monitor.html", "logo-vivir.png"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(SHELL).catch(() => {})));
