@@ -3,12 +3,21 @@
  * Pégalo en https://script.google.com con la sesión de contacto.velsant@gmail.com
  * Instrucciones completas en LEEME.md
  */
-const TOKEN = "https://script.google.com/macros/s/AKfycbzhi7U_FqlmCF4YVpXlMp1vGoevcXPHBa8N5P2_8o4m-Zv6oifch-CPO6y7YdvgVdFo/exec";   // Debe ser igual a DRIVE_TOKEN en config.js
+
+// Contraseña (NO es una URL). Debe ser IDÉNTICA a DRIVE_TOKEN en config.js
+const TOKEN = "VelsantCenso2026_Seguridad";
+
+const MIMES = ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "image/jpeg", "application/zip"];
 
 function doPost(e) {
   try {
     const d = JSON.parse(e.postData.contents);
     if (d.token !== TOKEN) return out({ ok: false, error: "Token incorrecto" });
+
+    // Validaciones básicas para que nadie suba cosas raras
+    if (!/^[\w.\- ]+$/.test(d.fileName)) return out({ ok: false, error: "Nombre de archivo no válido" });
+    if (!/^[\w.\- \/À-ſ]+$/.test(d.folder) || d.folder.indexOf("..") >= 0) return out({ ok: false, error: "Carpeta no válida" });
+    if (MIMES.indexOf(d.mimeType) < 0) return out({ ok: false, error: "Tipo de archivo no permitido" });
 
     // d.folder llega como "Carpeta raíz/JSG_2026-11-18"; se crea si no existe
     let folder = DriveApp.getRootFolder();
@@ -25,6 +34,9 @@ function doPost(e) {
     return out({ ok: false, error: String(err) });
   }
 }
+
+// Sirve para comprobar en el navegador que el despliegue está activo
+function doGet() { return out({ ok: true, mensaje: "Receptor activo" }); }
 
 function getOrCreate(parent, name) {
   const it = parent.getFoldersByName(name);
