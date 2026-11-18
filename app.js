@@ -387,16 +387,19 @@ async function showRecord(clave) {
 /* ------------------------------------------------------------------ */
 function download(blob, name) {
   const a = document.createElement("a"); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click();
-  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 4000);
+  setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 60000);
 }
 const fileBase = (suffix = "") => `${S.verifier.initials}_${S.jornada || today()}${suffix}`;
 const rowsOf = (recs) => recs.map((r) => r.values);
 
 function blobToB64(blob) { return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(",")[1]); fr.onerror = () => rej(fr.error); fr.readAsDataURL(blob); }); }
 async function driveUpload(folder, fileName, mimeType, blob) {
-  const r = await fetch(CONFIG.DRIVE_UPLOAD_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
-    body: JSON.stringify({ token: CONFIG.DRIVE_TOKEN, folder, fileName, mimeType, data: await blobToB64(blob) }) });
-  const j = await r.json().catch(() => ({ ok: false, error: "Respuesta no válida del receptor" }));
+  let r;
+  try {
+    r = await fetch(CONFIG.DRIVE_UPLOAD_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
+      body: JSON.stringify({ token: CONFIG.DRIVE_TOKEN, folder, fileName, mimeType, data: await blobToB64(blob) }) });
+  } catch { throw new Error("No se pudo conectar con el receptor de Drive. Revisa DRIVE_UPLOAD_URL en config.js y que la implementación esté como «Cualquier persona»."); }
+  const j = await r.json().catch(() => ({ ok: false, error: "Respuesta no válida del receptor (HTTP " + r.status + "). Revisa que la URL termine en /exec y que hayas publicado una nueva versión." }));
   if (!j.ok) throw new Error(j.error || "Error desconocido");
 }
 
@@ -409,7 +412,7 @@ async function closeJornada() {
 
   const dlg = $("#dlgClose"), log = $("#closeLog"), bar = $("#closeBar"), ok = $("#closeOk"), share = $("#closeShare");
   const say = (m) => { log.textContent += m + "\n"; log.scrollTop = log.scrollHeight; };
-  log.textContent = ""; bar.style.width = "0"; ok.disabled = true; share.hidden = true;
+  log.textContent = ""; bar.style.width = "0"; ok.disabled = true; share.hidden = true; $("#closeDlX").hidden = true; $("#closeDlZ").hidden = true;
   $("#closeMsg").textContent = "No cierres la aplicación hasta que termine.";
   dlg.showModal(); dlg.oncancel = (e) => e.preventDefault();
 
@@ -422,13 +425,21 @@ async function closeJornada() {
     say(`Archivo: ${base}.xlsx (${recs.length} registros)`); say(`Fotografías: ${photos.length}`);
 
     // 1) copia local en el teléfono
+    let photosZip = null;
+    if (photos.length) {
+      const files = []; for (const p of photos) files.push({ name: p.name, data: new Uint8Array(await p.blob.arrayBuffer()) });
+      photosZip = zipStore(files);
+    }
+    // Botones propios: una descarga iniciada con un toque nunca es bloqueada por el navegador
+    $("#closeDlX").hidden = false; $("#closeDlX").onclick = () => download(xlsx, base + ".xlsx");
+    if (photosZip) { $("#closeDlZ").hidden = false; $("#closeDlZ").onclick = () => download(photosZip, base + "_fotos.zip"); }
     if (!closeState || closeState.base !== base) {
-      download(xlsx, base + ".xlsx");
-      if (photos.length) {
-        const files = []; for (const p of photos) files.push({ name: p.name, data: new Uint8Array(await p.blob.arrayBuffer()) });
-        download(zipStore(files), base + "_fotos.zip");
-      }
-      closeState = { base }; say("✔ Copia guardada en el teléfono (carpeta Descargas)");
+      try {
+        download(xlsx, base + ".xlsx");
+        if (photosZip) { await new Promise((r) => setTimeout(r, 1500)); download(photosZip, base + "_fotos.zip"); }
+        say("✔ Descarga iniciada (carpeta Descargas)");
+      } catch { say("⚠ El navegador bloqueó la descarga automática: usa los botones de abajo."); }
+      closeState = { base };
     }
     bar.style.width = "20%";
 
@@ -444,11 +455,11 @@ async function closeJornada() {
         pend[i].uploaded = true; await dbPut("photos", pend[i]); say("✔ " + pend[i].name);
         bar.style.width = 20 + Math.round(((i + 1) / pend.length) * 80) + "%";
       }
-      say("Envío completo ✔");
+      say("Envío completo ✔"); say("Si lo necesitas, aún puedes bajar los archivos con los botones de abajo.");
       $("#closeMsg").textContent = "Jornada cerrada y enviada a Drive.";
     } else {
       say("Drive no configurado: use «Compartir» para enviarlos manualmente.");
-      $("#closeMsg").textContent = "Jornada cerrada. Archivos guardados en el teléfono.";
+      $("#closeMsg").textContent = "Jornada cerrada. Si no ves los archivos en Descargas, pulsa los botones de abajo ANTES de cerrar esta ventana.";
       const test = [new File([xlsx], base + ".xlsx", { type: XLSX_MIME }), ...photos.map((p) => new File([p.blob], p.name, { type: "image/jpeg" }))];
       if (navigator.canShare?.({ files: test })) { share.hidden = false; share.onclick = () => navigator.share({ files: test, title: base }).catch(() => {}); }
     }
