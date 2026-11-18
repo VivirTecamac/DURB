@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#6b1d2f">
+<title>Proyecto Crecimiento Estructural</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="logo.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<style>
+:root{
+  --brand:#6b1d2f; --brand-dark:#4e1322; --brand-soft:#f1e4e8;
+  --bg:#f6f1ec; --card:#fff; --ink:#241a1d; --muted:#6f6266; --line:#e2d8d3;
+  --ok:#2f7d4f; --warn:#b4570a; --err:#b3261e;
+  --r:14px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0}
+body{background:var(--bg);color:var(--ink);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  min-height:100vh;padding-bottom:env(safe-area-inset-bottom)}
+header.top{position:sticky;top:0;z-index:20;background:#fff;color:var(--brand);
+  display:flex;align-items:center;gap:12px;padding:8px 14px;padding-top:calc(8px + env(safe-area-inset-top));
+  border-bottom:3px solid var(--brand);box-shadow:0 2px 8px rgba(0,0,0,.12)}
+header.top img{height:52px;width:auto;max-width:90px;object-fit:contain;flex:none}
+header.top .t{flex:1;min-width:0}
+header.top h1{font-size:1.05rem;margin:0;line-height:1.15;font-weight:800;color:var(--brand)}
+header.top small{color:var(--muted);font-size:.78rem}
+.iconbtn{background:var(--brand-soft);border:0;color:var(--brand);width:42px;height:42px;border-radius:50%;font-size:1.25rem}
+main{max-width:640px;margin:0 auto;padding:14px 14px 110px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:16px;margin-bottom:14px}
+.card h2{font-size:1.05rem;margin:0 0 6px}
+.muted{color:var(--muted);font-size:.9rem}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.stat{background:var(--brand-soft);border-radius:12px;padding:12px;text-align:center}
+.stat b{display:block;font-size:1.7rem;color:var(--brand);line-height:1.1}
+.stat span{font-size:.8rem;color:var(--muted)}
+button.btn{font:inherit;font-weight:600;border:0;border-radius:12px;padding:15px 16px;width:100%;
+  background:var(--brand);color:#fff;margin-top:10px;cursor:pointer}
+button.btn:active{background:var(--brand-dark)}
+button.btn.alt{background:#fff;color:var(--brand);border:2px solid var(--brand)}
+button.btn.dark{background:#2b2327}
+button.btn.small{padding:10px 12px;width:auto;margin:0;font-size:.92rem}
+button.btn:disabled{opacity:.55}
+label.f{display:block;margin:0 0 14px}
+label.f>span,.lbl{display:block;font-weight:600;font-size:.88rem;margin-bottom:5px;color:var(--brand-dark)}
+input,select,textarea{font:inherit;font-size:16px;width:100%;padding:13px 12px;border:1.5px solid var(--line);
+  border-radius:11px;background:#fff;color:var(--ink)}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--brand);box-shadow:0 0 0 3px var(--brand-soft)}
+input[readonly]{background:#efe8e4;color:#4a3d41;font-weight:700;letter-spacing:.5px}
+textarea{min-height:84px;resize:vertical}
+.lock{display:flex;align-items:center;gap:8px}
+.lock input{flex:1}
+.coordbox{border:1.5px dashed var(--line);border-radius:11px;padding:12px;background:#fcfaf8}
+.coordbox .val{font-weight:700;font-variant-numeric:tabular-nums;word-break:break-all}
+.coordbox.ok{border-style:solid;border-color:var(--ok);background:#f1f9f4}
+.thumbs{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:10px}
+.thumb{position:relative;aspect-ratio:1;border-radius:10px;overflow:hidden;background:#ddd}
+.thumb img{width:100%;height:100%;object-fit:cover}
+.thumb button{position:absolute;top:4px;right:4px;width:28px;height:28px;border-radius:50%;border:0;background:rgba(0,0,0,.65);color:#fff}
+.thumb em{position:absolute;left:4px;bottom:4px;background:rgba(0,0,0,.65);color:#fff;font-size:.68rem;padding:1px 5px;border-radius:6px;font-style:normal}
+.bar{position:fixed;left:0;right:0;bottom:0;z-index:15;background:#fff;border-top:1px solid var(--line);
+  padding:10px 14px calc(10px + env(safe-area-inset-bottom));display:flex;gap:10px;max-width:none}
+.bar .btn{margin:0}
+.bar .inner{max-width:640px;margin:0 auto;display:flex;gap:10px;width:100%}
+.chip{display:inline-block;font-size:.75rem;padding:3px 9px;border-radius:20px;background:#eee;color:#444}
+.chip.on{background:#dff2e6;color:var(--ok)} .chip.off{background:#fde8d5;color:var(--warn)}
+.row{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--line)}
+.row:last-child{border:0}
+.row b{font-size:1.02rem}
+.tag{font-size:.72rem;padding:2px 8px;border-radius:12px;background:var(--brand-soft);color:var(--brand)}
+.banner{background:#fff4e5;border:1px solid #f1cf9b;color:#7a4a05;border-radius:12px;padding:10px 12px;font-size:.88rem;margin-bottom:14px}
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(92px + env(safe-area-inset-bottom));z-index:60;
+  background:#2b2327;color:#fff;padding:12px 18px;border-radius:12px;max-width:90%;text-align:center;font-size:.95rem;box-shadow:0 6px 20px rgba(0,0,0,.3)}
+.toast.err{background:var(--err)} .toast.ok{background:var(--ok)}
+dialog{border:0;border-radius:18px;padding:0;width:min(94vw,520px);max-height:88vh;color:var(--ink)}
+dialog::backdrop{background:rgba(0,0,0,.5)}
+dialog .in{padding:18px;overflow:auto;max-height:88vh}
+dialog h3{margin:0 0 10px}
+pre.log{background:#241a1d;color:#e9ddd6;font:.8rem/1.45 ui-monospace,Menlo,monospace;padding:12px;border-radius:10px;max-height:38vh;overflow:auto;white-space:pre-wrap;margin:10px 0 0}
+.progress{height:8px;background:var(--brand-soft);border-radius:8px;overflow:hidden;margin-top:10px}
+.progress i{display:block;height:100%;width:0;background:var(--brand);transition:width .2s}
+.kv{display:grid;grid-template-columns:120px 1fr;gap:4px 10px;font-size:.92rem}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-weight:600;word-break:break-word}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <img id="logo" alt="Logo">
+  <div class="t"><h1 id="appName"></h1><small id="appSub"></small></div>
+  <span id="netChip" class="chip">…</span>
+  <button class="iconbtn" id="btnSettings" aria-label="Ajustes" hidden>⚙</button>
+</header>
+
+<main>
+
+  <!-- ===== CONFIGURACIÓN INICIAL ===== -->
+  <section id="v-setup" hidden>
+    <div class="card">
+      <h2>Configuración inicial</h2>
+      <p class="muted">Se hace una sola vez en este teléfono.</p>
+
+      <label class="f"><span>Nombre completo del verificador</span>
+        <input id="setName" placeholder="Ej. Joel Santana Galindo" autocomplete="name"></label>
+      <label class="f"><span>Iniciales (para folios y archivos)</span>
+        <input id="setInit" maxlength="5" placeholder="JSG" style="text-transform:uppercase"></label>
+      <p class="muted" id="setPreview"></p>
+
+      <div id="setExcelBox">
+        <span class="lbl">Archivo Excel con la estructura (se carga solo el predeterminado; aquí puedes elegir otro)</span>
+        <input type="file" id="setFile" accept=".xlsx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet">
+        <div id="setSheetBox" hidden style="margin-top:10px"><span class="lbl">Hoja a utilizar</span><select id="setSheet"></select></div>
+        <p class="muted" id="setCols" style="margin-top:8px"></p>
+      </div>
+      <button class="btn" id="btnStart">Comenzar</button>
+    </div>
+  </section>
+
+  <!-- ===== INICIO ===== -->
+  <section id="v-home" hidden>
+    <div id="homeBanner" class="banner" hidden></div>
+    <div class="card">
+      <h2 id="homeWho"></h2>
+      <p class="muted" id="homeJornada"></p>
+      <div class="grid2" style="margin-top:12px">
+        <div class="stat"><b id="stRec">0</b><span>Registros de la jornada</span></div>
+        <div class="stat"><b id="stPho">0</b><span>Fotos de la jornada</span></div>
+      </div>
+      <p class="muted" style="margin:12px 0 0">Próxima clave: <b id="stNext"></b></p>
+    </div>
+    <button class="btn" id="btnNew" style="font-size:1.1rem;padding:18px">＋ Nuevo registro</button>
+    <button class="btn alt" id="btnList">Ver registros</button>
+    <button class="btn dark" id="btnClose">Cierre de jornada</button>
+  </section>
+
+  <!-- ===== FORMULARIO ===== -->
+  <section id="v-form" hidden>
+    <form id="form" autocomplete="off" novalidate></form>
+  </section>
+
+  <!-- ===== LISTA ===== -->
+  <section id="v-list" hidden>
+    <div class="card"><h2>Registros</h2><div id="listBody"></div></div>
+    <button class="btn alt" id="btnListBack">← Volver</button>
+  </section>
+
+</main>
+
+<div class="bar" id="formBar" hidden>
+  <div class="inner">
+    <button class="btn alt" id="btnCancel" type="button" style="flex:1">Cancelar</button>
+    <button class="btn" id="btnSave" type="button" style="flex:2">Guardar</button>
+  </div>
+</div>
+
+<!-- Detalle de registro -->
+<dialog id="dlgRec"><div class="in">
+  <h3 id="recTitle"></h3><dl class="kv" id="recBody"></dl><div class="thumbs" id="recPhotos"></div>
+  <button class="btn alt" onclick="this.closest('dialog').close()">Cerrar</button>
+</div></dialog>
+
+<!-- Ajustes -->
+<dialog id="dlgSet"><div class="in">
+  <h3>Ajustes</h3>
+  <label class="f"><span>Nombre del verificador</span><input id="cfgName"></label>
+  <label class="f"><span>Iniciales</span><input id="cfgInit" maxlength="5" style="text-transform:uppercase"></label>
+  <button class="btn" id="cfgSave">Guardar cambios</button>
+  <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+  <button class="btn alt" id="cfgDefault">Recargar estructura por omisión</button>
+  <span class="lbl" style="margin-top:14px">Cargar otra estructura de Excel</span>
+  <input type="file" id="cfgFile" accept=".xlsx">
+  <p class="muted" id="cfgFileMsg"></p>
+  <hr style="border:0;border-top:1px solid var(--line);margin:16px 0">
+  <button class="btn alt" id="cfgXlsx">Descargar Excel de la jornada</button>
+  <button class="btn alt" id="cfgCsv">Descargar CSV de la jornada</button>
+  <button class="btn" id="cfgZip">Descargar TODO (Excel + fotos) en ZIP</button>
+  <button class="btn dark" onclick="this.closest('dialog').close()">Cerrar</button>
+</div></dialog>
+
+<!-- Cierre de jornada -->
+<dialog id="dlgClose"><div class="in">
+  <h3>Cierre de jornada</h3>
+  <p class="muted" id="closeMsg"></p>
+  <div class="progress"><i id="closeBar"></i></div>
+  <pre class="log" id="closeLog"></pre>
+  <button class="btn" id="closeShare" hidden>Compartir archivos…</button>
+  <button class="btn alt" id="closeOk" disabled>Cerrar</button>
+</div></dialog>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="config.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
