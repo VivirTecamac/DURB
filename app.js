@@ -550,3 +550,82 @@ async function boot() {
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 boot();
+/* ------------------------------------------------------------------ */
+/*  NUEVO: Rastreo GPS en Tiempo Real hacia Firebase                   */
+/* ------------------------------------------------------------------ */
+let liveDb = null;
+let watchId = null;
+
+function initLiveTracking() {
+  if (!CONFIG.FIREBASE_CONFIG?.databaseURL || typeof firebase === "undefined") return;
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(CONFIG.FIREBASE_CONFIG);
+    liveDb = firebase.database();
+    firebase.auth().signInAnonymously()
+      .then(() => startGpsStream())
+      .catch((e) => console.warn("Auth en espera:", e));
+  } catch (e) {
+    console.warn("Firebase en espera de conexión:", e);
+  }
+}
+
+function startGpsStream() {
+  if (!liveDb || !S.verifier || !("geolocation" in navigator) || watchId !== null) return;
+
+  watchId = navigator.geolocation.watchPosition(
+    (pos) => {
+      if (!navigator.onLine || !firebase.auth().currentUser) return;
+      const id = S.verifier.initials;
+      const ruta = `acceso_supervisor/${CONFIG.SUPERVISOR_KEY}/verificadores/${id}`;
+      liveDb.ref(ruta).set({
+        nombre: S.verifier.name,
+        iniciales: id,
+        lat: pos.coords.latitude,
+        lng: pos.coords.longitude,
+        precision: Math.round(pos.coords.accuracy),
+        registros_hoy: jornadaRecords().length,
+        ultimo_folio: S.records.length ? S.records[S.records.length - 1].clave : "Ninguno",
+        hora: nowTime(),
+        fecha: today()
+      });
+    },
+    (err) => console.warn("GPS segundo plano:", err.message),
+    { enableHighAccuracy: true, maximumAge: 10000, timeout: 20000 }
+  );
+}
+
+
+/* ------------------------------------------------------------------ */
+/*  Arranque (Reemplaza el boot() al final de tu app.js)               */
+/* ------------------------------------------------------------------ */
+async function boot() {
+  document.title = CONFIG.APP_NAME; $("#cfgDefault").textContent = `Recargar estructura desde ${CONFIG.DEFAULT_EXCEL || "el Excel por omisión"}`; $("#cfgDefault").hidden = !CONFIG.DEFAULT_EXCEL;
+  $("#appName").textContent = CONFIG.APP_NAME; $("#appSub").textContent = CONFIG.APP_SUBTITLE;
+  $("#logo").src = CONFIG.LOGO;
+  document.querySelector('meta[name="theme-color"]').content = CONFIG.THEME_COLOR;
+  document.documentElement.style.setProperty("--brand", CONFIG.THEME_COLOR);
+  addEventListener("online", netChip); addEventListener("offline", netChip); netChip();
+
+  try { db = await openDB(); await loadState(); }
+  catch { document.querySelector("main").innerHTML = '<div class="card"><h2>Almacenamiento no disponible</h2><p>Esta aplicación necesita guardar datos en el navegador. Sal del modo incógnito o abre la app desde Chrome/Safari.</p></div>'; return; }
+  if (navigator.storage?.persist) navigator.storage.persist().catch(() => {});
+
+  initSettings();
+  $("#btnNew").onclick = openForm; $("#btnList").onclick = openList; $("#btnListBack").onclick = goHome; $("#btnClose").onclick = closeJornada;
+  $("#btnSave").onclick = saveRecord;
+  $("#btnCancel").onclick = () => { if (!formDirty() || confirm("¿Descartar este registro? Se perderán los datos capturados.")) closeForm(); };
+
+  // Inicia el rastreo si el verificador ya está registrado
+  initLiveTracking();
+
+  if (!S.columns.length || !S.verifier) {
+    initSetup();
+    // Si es la primera vez que entra, activa el GPS justo al pulsar "Comenzar"
+    const origStart = $("#btnStart").onclick;
+    $("#btnStart").onclick = async () => { await origStart(); initLiveTracking(); };
+  } else {
+    goHome();
+  }
+  if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
+}
+boot();

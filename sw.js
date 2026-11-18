@@ -1,5 +1,5 @@
 // Service worker: permite abrir la app sin internet (red primero, caché de respaldo)
-const CACHE = "pce-v1";
+const CACHE = "pce-v2";
 const SHELL = ["./", "index.html", "app.js", "config.js", "logo.png", "manifest.json", "icon-192.png", "icon-512.png"];
 
 self.addEventListener("install", (e) => {

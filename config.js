@@ -53,3 +53,51 @@ const CONFIG = {
     // "CAMPO 06": ["Sí", "No"],
   },
 };
+
+/* =====================================================================
+   CONFIGURACIÓN DE LA APLICACIÓN  —  EDITA SOLO ESTE ARCHIVO
+   ===================================================================== */
+const CONFIG = {
+  /* ---------- Identidad ---------- */
+  APP_NAME:     "Proyecto Crecimiento Estructural",
+  APP_SUBTITLE: "Censo municipal",
+  LOGO:         "logo.png",
+  THEME_COLOR:  "#6b1d2f",
+
+  /* ---------- Estructura del formulario ---------- */
+  DEFAULT_EXCEL: "BDD_001.xlsx",
+
+  /* ---------- Cuenta de Google Drive ---------- */
+  DRIVE_EMAIL:      "contacto.velsant@gmail.com",
+  DRIVE_UPLOAD_URL: "https://google.com",
+  DRIVE_TOKEN:      "VelsantCenso2026_Seguridad",
+  DRIVE_FOLDER:     "Proyecto Crecimiento Estructural",
+
+  /* ---------- Reglas de captura ---------- */
+  CLEAR_ON_CLOSE:     true,
+  FOLIO_DIGITS:       3,
+  REQUIRE_COORDS:     true,
+  REQUIRE_PHOTO:      true,
+  REQUIRE_ALL_FIELDS: false,
+  REQUIRED_FIELDS:    [],
+  PHOTO_MAX_PX:       1600,
+  PHOTO_QUALITY:      0.8,
+  FIELD_TYPES:        {},
+  FIELD_OPTIONS:      {},
+
+  /* ---------- NUEVO: Seguimiento en Tiempo Real y KML ---------- */
+  KML_FILE: "zonas_verificacion.kml", // Nombre exacto de tu archivo KML en el repositorio
+  FIREBASE_CONFIG: {
+    apiKey: "TU_API_KEY_DE_FIREBASE",
+    databaseURL: "https://firebaseio.com",
+    projectId: "TU-PROYECTO"
+  }
+};
+  /* ---------- Seguimiento en Tiempo Real y KML ---------- */
+  KML_FILE: "zonas_verificacion.kml",
+  SUPERVISOR_KEY: "CLAVSUP2026", // Debe coincidir con tus reglas de Firebase
+  FIREBASE_CONFIG: {
+    apiKey: "TU_API_KEY_DE_FIREBASE",
+    databaseURL: "https://firebaseio.com",
+    projectId: "TU-PROYECTO"
+  }

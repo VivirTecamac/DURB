@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitor en Tiempo Real — PCE</title>
+  <link rel="stylesheet" href="https://unpkg.com" />
+  <style>
+    body { margin: 0; font-family: system-ui, -apple-system, sans-serif; background: #f6f1ec; }
+    header { background: #6b1d2f; color: #fff; padding: 12px 16px; display: flex; justify-content: space-between; align-items: center; }
+    header h1 { margin: 0; font-size: 1.1rem; }
+    #status { font-size: 0.85rem; background: rgba(255,255,255,0.2); padding: 4px 10px; border-radius: 12px; }
+    #mapa { height: calc(100vh - 52px); width: 100%; }
+    .pin-verificador {
+      background: #6b1d2f; color: #fff; border: 2px solid #fff; border-radius: 50%;
+      width: 34px; height: 34px; display: flex; align-items: center; justify-content: center;
+      font-weight: bold; font-size: 12px; box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1 id="tituloApp">Supervisión en Campo</h1>
+  <span id="status">Conectando…</span>
+</header>
+<div id="mapa"></div>
+
+<!-- Librerías de Mapa, KML y Firebase -->
+<script src="https://unpkg.com"></script>
+<script src="https://mapbox.com"></script>
+<script src="https://gstatic.com"></script>
+<script src="https://gstatic.com"></script>
+<script src="https://gstatic.com"></script>
+<script src="https://gstatic.com"></script>
+<script src="https://gstatic.com"></script>
+
+
+<!-- Tu archivo de configuración -->
+<script src="config.js"></script>
+
+<script>
+  document.getElementById("tituloApp").textContent = CONFIG.APP_NAME + " — Mapa en Vivo";
+
+  // 1. Iniciar Mapa
+  const mapa = L.map("mapa").setView([19.7129, -98.9685], 13);
+  L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+    attribution: "© OpenStreetMap"
+  }).addTo(mapa);
+
+  // 2. Cargar capa KML de Google My Maps
+  if (CONFIG.KML_FILE) {
+    const capaKml = omnivore.kml(CONFIG.KML_FILE)
+      .on("ready", function () {
+        mapa.fitBounds(capaKml.getBounds());
+        capaKml.eachLayer(function (layer) {
+          if (layer.feature?.properties?.name) {
+            layer.bindPopup(`<b>${layer.feature.properties.name}</b><br>${layer.feature.properties.description || ""}`);
+          }
+        });
+      })
+      .on("error", () => console.warn("No se pudo cargar el archivo KML:", CONFIG.KML_FILE))
+      .addTo(mapa);
+  }
+
+    // 3. Conectar a Firebase con contraseña de supervisor
+  firebase.initializeApp(CONFIG.FIREBASE_CONFIG);
+  const db = firebase.database();
+  const marcadores = {};
+
+  const claveIngresada = prompt("Ingresa la clave de supervisor para ver el mapa en vivo:");
+
+  if (claveIngresada) {
+    firebase.auth().signInAnonymously().then(() => {
+      db.ref(`acceso_supervisor/${claveIngresada}/verificadores`).on("value", (snap) => {
+        const data = snap.val();
+        let activos = 0;
+
+        if (!data) {
+          document.getElementById("status").textContent = "0 verificadores activos";
+          return;
+        }
+
+        Object.keys(data).forEach((ini) => {
+          const v = data[ini];
+          activos++;
+
+          const icono = L.divIcon({
+            className: "",
+            html: `<div class="pin-verificador">${v.iniciales}</div>`,
+            iconSize:,
+            iconAnchor: [17, 17]
+          });
+
+          const popup = `
+            <b>${v.nombre} (${v.iniciales})</b><br>
+            🕒 Último reporte: <b>${v.hora}</b> (${v.fecha})<br>
+            📋 Registros hoy: <b>${v.registros_hoy}</b> (Último: ${v.ultimo_folio})<br>
+            🎯 Precisión GPS: ±${v.precision} m
+          `;
+
+          if (marcadores[ini]) {
+            marcadores[ini].setLatLng([v.lat, v.lng]).setPopupContent(popup);
+          } else {
+            marcadores[ini] = L.marker([v.lat, v.lng], { icon: icono })
+              .addTo(mapa)
+              .bindPopup(popup);
+          }
+        });
+
+        document.getElementById("status").textContent = `${activos} verificador(es) en mapa`;
+      }, (error) => {
+        document.getElementById("status").textContent = "Acceso denegado";
+        alert("Clave incorrecta o sin permisos para ver las ubicaciones.");
+      });
+    });
+  } else {
+    document.getElementById("status").textContent = "Bloqueado";
+  }
+</script>
+</body>
+</html>

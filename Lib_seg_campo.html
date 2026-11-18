@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Monitoreo con Capa KML</title>
+  <!-- Estilos de Leaflet -->
+  <link rel="stylesheet" href="https://unpkg.com" />
+  <style>
+    #mapa { height: 92vh; width: 100%; border-radius: 8px; }
+  </style>
+</head>
+<body>
+
+  <h3>Supervisión en Campo y Zonas Asignadas</h3>
+  <div id="mapa"></div>
+
+  <!-- 1. Librerías de Leaflet y Omnivore (para leer KML) -->
+  <script src="https://unpkg.com"></script>
+  <script src="https://mapbox.com"></script>
+
+  <!-- 2. Librerías de Firebase -->
+  <script src="https://gstatic.com"></script>
+  <script src="https://gstatic.com"></script>
+
+  <script>
+    // Configuración de Firebase
+    const firebaseConfig = {
+      apiKey: "TU_API_KEY",
+      databaseURL: "https://firebaseio.com",
+      projectId: "TU-PROYECTO"
+    };
+    firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    // Inicializar mapa base
+    const mapa = L.map('mapa').setView([19.7129, -98.9685], 13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap'
+    }).addTo(mapa);
+
+    // 3. CARGAR TU ARCHIVO KML DE GOOGLE MY MAPS
+    const capaKml = omnivore.kml('zonas_verificacion.kml')
+      .on('ready', function() {
+        // Ajusta el zoom del mapa automáticamente para abarcar todo tu KML
+        mapa.fitBounds(capaKml.getBounds());
+        
+        // Muestra los nombres y descripciones que pusiste en My Maps al hacer clic
+        capaKml.eachLayer(function(layer) {
+          if (layer.feature && layer.feature.properties && layer.feature.properties.name) {
+            layer.bindPopup(`<b>${layer.feature.properties.name}</b><br>${layer.feature.properties.description || ''}`);
+          }
+        });
+      })
+      .on('error', function(e) {
+        console.error("Error al cargar el KML:", e);
+      })
+      .addTo(mapa);
+
+    // 4. RASTREO EN TIEMPO REAL DE VERIFICADORES
+    const marcadores = {};
+
+    db.ref('ubicaciones').on('value', (snapshot) => {
+      const datos = snapshot.val();
+      if (!datos) return;
+
+      Object.keys(datos).forEach((id) => {
+        const { latitud, longitud, ultima_actualizacion } = datos[id];
+        const info = `<b>Verificador: ${id}</b><br>Último reporte: ${ultima_actualizacion}`;
+
+        if (marcadores[id]) {
+          marcadores[id].setLatLng([latitud, longitud]).setPopupContent(info);
+        } else {
+          marcadores[id] = L.marker([latitud, longitud])
+            .addTo(mapa)
+            .bindPopup(info);
+        }
+      });
+    });
+  </script>
+</body>
+</html>
