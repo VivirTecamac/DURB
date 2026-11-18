@@ -3,7 +3,7 @@
  * Pégalo en https://script.google.com con la sesión de contacto.velsant@gmail.com
  * Instrucciones completas en LEEME.md
  */
-const TOKEN = "cambia-este-token";   // Debe ser igual a DRIVE_TOKEN en config.js
+const TOKEN = "https://script.google.com/macros/s/AKfycbzhi7U_FqlmCF4YVpXlMp1vGoevcXPHBa8N5P2_8o4m-Zv6oifch-CPO6y7YdvgVdFo/exec";   // Debe ser igual a DRIVE_TOKEN en config.js
 
 function doPost(e) {
   try {
