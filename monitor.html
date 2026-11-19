@@ -66,9 +66,9 @@ button.b{font:inherit;font-size:.74rem;font-weight:bold;padding:8px 10px;border-
   <div class="head">
     <img id="logo" alt="Logo">
     <div class="t">
-      <p class="l1"> DIRECCIÓN DE DESARROLLO URBANO Y VIVIENDA</p>
-      <p class="l2">MUNICIPIO DE TECÁMAC.</p>
-      <h1>📡 Monitoreo de verificadores</h1>
+      <p class="l1">Empresa de Participación Mayoritaria</p>
+      <p class="l2">VIVIR TECÁMAC S.A. de C.V.</p>
+      <h1>📡 Monitor de verificadores</h1>
     </div>
   </div>
   <div class="status"><span id="stTime">Conectando…</span><span id="stCount"></span></div>
@@ -136,7 +136,7 @@ const accLayer = L.featureGroup();
 /* ---- Puntos de logística + pestaña Rutas ---- */
 const navUrl = (p) => `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving`;
 (CONFIG.LOGISTICA || []).forEach((p) => {
-  L.marker([p.lat, p.lng], { icon: L.divIcon({ className: "", html: '<div class="flag">📌</div>', iconSize: [22, 22], iconAnchor: [11, 11] }) })
+  L.marker([p.lat, p.lng], { icon: L.divIcon({ className: "", html: '<div class="flag">🚚</div>', iconSize: [22, 22], iconAnchor: [11, 11] }) })
     .bindPopup(`<b>${esc(p.name)}</b><br><a href="${navUrl(p)}" target="_blank" rel="noopener">Iniciar navegación ➔</a>`).addTo(logLayer);
 });
 $("#rutas").innerHTML = (CONFIG.LOGISTICA || []).map((p) =>
@@ -224,7 +224,7 @@ function askToken(err) {
 }
 async function api(action) {
   const r = await fetch(`${URL_API}?action=${action}&token=${encodeURIComponent(token)}`, { cache: "no-store" });
-  return r.json();
+  return r.json().catch(() => { throw new Error("Respuesta no válida del receptor. En Apps Script la implementación debe ser «Cualquier persona» y la URL terminar en /exec."); });
 }
 
 /* =========================== Verificadores ========================= */
@@ -257,7 +257,10 @@ function render(items, now) {
     // Círculo de precisión
     if (it.acc) { if (accs[it.id]) accs[it.id].setLatLng(ll).setRadius(it.acc); else accs[it.id] = L.circle(ll, { radius: it.acc, color: "#0b57d0", weight: 1, fillOpacity: 0.08 }).addTo(accLayer); }
   });
+  // Verificadores que ya no reportan (cerraron jornada): se quitan pin, círculo y recorrido
   Object.keys(marks).forEach((id) => { if (!seen.has(id)) { vLayer.removeLayer(marks[id]); delete marks[id]; } });
+  Object.keys(accs).forEach((id) => { if (!seen.has(id)) { accLayer.removeLayer(accs[id]); delete accs[id]; } });
+  Object.keys(trails).forEach((id) => { if (!seen.has(id)) { trailLayer.removeLayer(trails[id].line); delete trails[id]; } });
 
   $("#list").innerHTML = list.map(({ it, age, st }) =>
     `<div class="card ${st}" data-id="${esc(it.id)}"><span class="dot"></span><div><b>${esc(it.name || it.id)}</b><small>${esc(it.id)} · ${label[st]} · ${ago(age)}</small></div>` +
@@ -287,6 +290,7 @@ async function poll() {
       if (/clave/i.test(j.error || "")) { store.del(TOKEN_KEY); clearInterval(timer); timer = null; await askToken("Clave incorrecta. Inténtalo de nuevo."); start(); return false; }
       throw new Error(j.error);
     }
+    if (!Array.isArray(j.items)) throw new Error("El receptor de Google NO está actualizado: pega el nuevo drive-receptor.gs en Apps Script y publica una Nueva versión.");
     store.set(TOKEN_KEY, token); lastOk = Date.now();
     render(j.items, j.now);
     $("#stTime").textContent = "Actualizado " + new Date().toTimeString().slice(0, 8);

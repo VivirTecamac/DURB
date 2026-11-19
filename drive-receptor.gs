@@ -22,7 +22,7 @@ const KML_MAP_ID = "1GIz2dXEl-IxBvFGsPTf0fCWlTdyNsec";
 
 const MIMES = ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "image/jpeg", "application/zip"];
 const POS_PREFIX = "pos_";
-const POS_MAX_AGE_MS = 24 * 3600 * 1000;   // posiciones más viejas de 24 h se borran solas
+const POS_MAX_AGE_MS = 12 * 3600 * 1000;   // si un verificador olvida cerrar jornada, a las 12 h sin reportar se borra solo
 
 /* ---------------------------- POST ---------------------------- */
 function doPost(e) {
@@ -56,10 +56,10 @@ function savePing(d) {
   const key = POS_PREFIX + d.id;
   let rec;
   if (d.status === "off") {
-    // Fin de jornada / pausa: se conserva la última posición conocida
-    const prev = props.getProperty(key);
-    rec = prev ? JSON.parse(prev) : { id: d.id, lat: null, lng: null };
-    rec.status = "off";
+    // Cierre de jornada: el verificador desaparece del mapa. Reaparece solo cuando
+    // vuelva a conectarse (su siguiente "ping" crea de nuevo el registro).
+    props.deleteProperty(key);
+    return out({ ok: true });
   } else {
     const lat = Number(d.lat), lng = Number(d.lng);
     if (!isFinite(lat) || !isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return out({ ok: false, error: "Coordenada no válida" });
