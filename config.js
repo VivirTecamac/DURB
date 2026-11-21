@@ -33,7 +33,7 @@ const CONFIG = {
   // y la app está abierta; al cerrar la jornada se detiene. Avísales: es un monitoreo laboral.
   TRACKING_ENABLED:     true,
   TRACK_INTERVAL_SEC:   60,    // Cada cuántos segundos se envía la posición (30 a 120 recomendado)
-  TRACK_ALLOW_PAUSE:    true,  // false = el verificador no puede pausar el envío
+  // El verificador NO puede pausar el envío: la ubicación se comparte desde que abre la app hasta que cierra su jornada.
   TRACK_KEEP_SCREEN_ON: true,  // Mantiene la pantalla encendida para no perder la señal (gasta más batería)
 
   /* ---------- Monitor (monitor.html) ---------- */
@@ -57,6 +57,17 @@ const CONFIG = {
   /* ---------- Reglas de captura ---------- */
   CLEAR_ON_CLOSE:  true,   // true = al cerrar la jornada se borran de la app los registros y fotos
                            // (el Excel de cada jornada se conserva en la app para el ZIP de Ajustes)
+  /* ---------- Campos automáticos (se reconocen por el ENCABEZADO de la columna del Excel) ----------
+     "fecha"     -> se llena sola con la fecha de hoy si está en blanco; visible y NO editable
+     "hora"      -> se llena sola con la hora actual si está en blanco; visible y NO editable
+     "concluye"  -> queda vacío hasta que el verificador pulsa «Llenar» (hora de ese momento); NO editable
+     Puedes agregar más encabezados o cambiar los nombres.                                            */
+  AUTO_FIELDS: { "FECHA": "fecha", "HORA": "hora", "CONCLUYE (HR)": "concluye" },
+  DATE_FORMAT: "DD/MM/YYYY",       // Tokens: DD MM YYYY
+  TIME_FORMAT: "HH:mm",            // Tokens: HH mm ss  (24 horas)
+  CONCLUYE_REFILL: false,          // false = «Llenar» solo se puede pulsar una vez por registro
+  CONCLUYE_CONFIRM_EMPTY: true,    // Al guardar, avisa si no se pulsó «Llenar»
+
   FOLIO_DIGITS:    3,      // JSG001 -> 3 dígitos
   REQUIRE_COORDS:  true,   // Obligar a tomar la coordenada antes de guardar
   REQUIRE_PHOTO:   true,   // Obligar al menos una foto antes de guardar
@@ -70,6 +81,7 @@ const CONFIG = {
      Por defecto todo es texto. Usa el ENCABEZADO EXACTO de la columna del Excel.
      Tipos: "text", "textarea", "number", "date", "tel", "select"                */
   FIELD_TYPES: {
+    "NARRACIÓN OBJETIVA DE HECHOS Y MOTIVOS:": "textarea",   // cuadro de texto grande
     // "CAMPO 04": "number",
     // "CAMPO 05": "textarea",
     // "CAMPO 06": "select",

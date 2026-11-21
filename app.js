@@ -124,8 +124,8 @@ const xmlEsc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;",
 
 function buildXlsx(columns, rows) {
   const cell = (r, c, v, style) => `<c r="${colName(c)}${r}" t="inlineStr"${style ? ` s="${style}"` : ""}><is><t xml:space="preserve">${xmlEsc(v)}</t></is></c>`;
-  let sd = `<row r="1">${columns.map((h, c) => cell(1, c, h, 1)).join("")}</row>`;
-  rows.forEach((row, i) => { sd += `<row r="${i + 2}">${columns.map((_, c) => cell(i + 2, c, row[c] ?? "")).join("")}</row>`; });
+  let sd = `<row r="1">${columns.map((h, c) => (h ? cell(1, c, h, 1) : "")).join("")}</row>`;
+  rows.forEach((row, i) => { sd += `<row r="${i + 2}">${columns.map((h, c) => (h ? cell(i + 2, c, row[c] ?? "") : "")).join("")}</row>`; });
   const cols = columns.map((h, c) => `<col min="${c + 1}" max="${c + 1}" width="${Math.max(14, Math.min(40, String(h).length + 4))}" customWidth="1"/>`).join("");
   const X = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n';
   const enc = new TextEncoder();
@@ -170,6 +170,7 @@ async function unzip(buf) {
   };
 }
 const xml = (s) => new DOMParser().parseFromString(s, "application/xml");
+const nCols = (c) => c.filter(Boolean).length;   // columnas con encabezado
 const REL_NS = "http://schemas.openxmlformats.org/officeDocument/2006/relationships";
 
 async function excelSheets(file) {
@@ -192,12 +193,17 @@ async function excelHeaders(z, sheetPath) {
       if (t === "s") v = shared[+c.querySelector("v")?.textContent] ?? "";
       else if (t === "inlineStr") v = [...c.querySelectorAll("t")].map((x) => x.textContent).join("");
       else v = c.querySelector("v")?.textContent ?? "";
-      v = v.trim(); if (!v) return;
+      if (!v.trim()) return;   // se conserva el texto original del encabezado
       const letters = (c.getAttribute("r") || "A1").replace(/\d+/g, "");
       let idx = 0; for (const ch of letters) idx = idx * 26 + (ch.charCodeAt(0) - 64);
       cells.push([idx, v]);
     });
-    if (cells.length) { best = cells.sort((a, b) => a[0] - b[0]).map((x) => x[1]); break; }
+    if (cells.length) {
+      best = []; cells.forEach(([i, v]) => (best[i - 1] = v));
+      best = Array.from(best, (v) => v ?? "");            // columnas vacías se conservan como ""
+      while (best.length && best[0] === "") best.shift();  // sin columnas en blanco al inicio
+      break;
+    }
   }
   if (!best) throw new Error("La hoja está vacía: no encontré encabezados en la primera fila.");
   return best;
@@ -228,7 +234,7 @@ function initSetup() {
   $("#setInit").oninput = refreshSetup;
   const loadSetup = (f, label) => handleExcelFile(f, "#setSheet", "#setSheetBox", $("#setCols"), (cols) => {
     setupCols = cols;
-    if (cols) $("#setCols").textContent = `✔ ${label}: ${cols.length} campos detectados (${cols.slice(0, 4).join(", ")}${cols.length > 4 ? "…" : ""})`;
+    if (cols) $("#setCols").textContent = `✔ ${label}: ${nCols(cols)} campos detectados (${cols.filter(Boolean).slice(0, 4).join(", ")}${nCols(cols) > 4 ? "…" : ""})`;
   });
   $("#setFile").onchange = (e) => { const f = e.target.files[0]; if (f) loadSetup(f, f.name); };
   setupCols = null;
@@ -244,7 +250,7 @@ function initSetup() {
     if (ini.length < 2) return toast("Las iniciales deben tener al menos 2 letras", "err");
     if (!S.columns.length) {
       if (!setupCols) return toast("Carga el archivo Excel con la estructura", "err");
-      if (setupCols.length < 3) return toast("El Excel debe tener al menos 3 columnas", "err");
+      if (nCols(setupCols) < 3) return toast("El Excel debe tener al menos 3 columnas", "err");
       S.columns = setupCols;
     }
     S.verifier = { name, initials: ini }; await saveMeta(); goHome(); autoTrack();
@@ -276,6 +282,19 @@ const typeOf = (h) => { const k = Object.keys(CONFIG.FIELD_TYPES).find((x) => ke
 const optsOf = (h) => { const k = Object.keys(CONFIG.FIELD_OPTIONS).find((x) => key(x) === key(h)); return k ? CONFIG.FIELD_OPTIONS[k] : []; };
 const isRequired = (h) => CONFIG.REQUIRE_ALL_FIELDS || CONFIG.REQUIRED_FIELDS.some((x) => key(x) === key(h));
 
+/* ---- Campos automáticos por nombre de columna (FECHA, HORA, CONCLUYE (HR)) ---- */
+const normH = (s) => String(s).normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/\s+/g, "").toUpperCase();
+function autoKind(h) { const k = Object.keys(CONFIG.AUTO_FIELDS || {}).find((x) => normH(x) === normH(h)); return k ? CONFIG.AUTO_FIELDS[k] : null; }
+function fmtNow(pattern, d = new Date()) {
+  return String(pattern).replace(/YYYY|DD|MM|HH|mm|ss/g, (t) => ({ YYYY: d.getFullYear(), DD: pad(d.getDate(), 2), MM: pad(d.getMonth() + 1, 2), HH: pad(d.getHours(), 2), mm: pad(d.getMinutes(), 2), ss: pad(d.getSeconds(), 2) }[t]));
+}
+const nowFor = (kind) => (kind === "fecha" ? fmtNow(CONFIG.DATE_FORMAT || "DD/MM/YYYY") : fmtNow(CONFIG.TIME_FORMAT || "HH:mm"));
+function autoFieldHtml(h, idx, kind) {
+  if (kind === "concluye")
+    return `<div class="f" style="margin-bottom:14px"><span class="lbl">${esc(h)}</span><div class="lock"><input data-i="${idx}" data-auto="concluye" readonly placeholder="Sin llenar" value=""><button type="button" class="btn small" id="btnConcluye">Llenar</button></div></div>`;
+  return `<label class="f"><span>${esc(h)} (automático)</span><div class="lock"><input data-i="${idx}" data-auto="${kind}" readonly value="${esc(nowFor(kind))}"><span aria-hidden="true">🔒</span></div></label>`;
+}
+
 function openForm() {
   if (!T.on) startTracking();
   S.draft = { clave: nextClave(), coords: "", acc: null, photos: [] };
@@ -285,7 +304,9 @@ function openForm() {
   html += `<div class="f"><span class="lbl">${esc(S.columns[1])}</span><div class="coordbox" id="coordBox"><div class="val" id="coordVal">Sin capturar</div><div class="muted" id="coordAcc"></div>
     <button type="button" class="btn small" id="btnGps" style="margin-top:10px">📍 Tomar coordenada de mi ubicación</button></div></div>`;
   S.columns.slice(2).forEach((h, i) => {
+    if (!h) return;   // columna en blanco del Excel: se conserva en el archivo exportado pero no se captura
     const t = typeOf(h), idx = i + 2, req = isRequired(h) ? " *" : "";
+    const ak = autoKind(h); if (ak) { html += autoFieldHtml(h, idx, ak); return; }
     let inp;
     if (t === "textarea") inp = `<textarea data-i="${idx}"></textarea>`;
     else if (t === "select") inp = `<select data-i="${idx}"><option value="">— Selecciona —</option>${optsOf(h).map((o) => `<option>${esc(o)}</option>`).join("")}</select>`;
@@ -301,6 +322,11 @@ function openForm() {
   $("#btnGps").onclick = captureGps;
   $("#btnPhoto").onclick = () => $("#fPhoto").click();
   $("#fPhoto").onchange = addPhoto;
+  const bc = $("#btnConcluye");
+  if (bc) bc.onclick = () => {
+    const inp = $('[data-auto="concluye"]'); if (inp.value && !CONFIG.CONCLUYE_REFILL) return;
+    inp.value = nowFor("hora"); bc.textContent = CONFIG.CONCLUYE_REFILL ? "Actualizar hora" : "✔ Llenado"; bc.disabled = !CONFIG.CONCLUYE_REFILL;
+  };
   show("form");
 }
 
@@ -336,7 +362,7 @@ function drawThumbs() {
   $("#thumbs").innerHTML = S.draft.photos.map((p, i) => `<div class="thumb"><img src="${p.url}" alt=""><em>${esc(S.draft.clave)}_${i + 1}</em><button type="button" data-rm="${i}" aria-label="Quitar">✕</button></div>`).join("");
   $("#thumbs").querySelectorAll("[data-rm]").forEach((b) => (b.onclick = () => { URL.revokeObjectURL(S.draft.photos[+b.dataset.rm].url); S.draft.photos.splice(+b.dataset.rm, 1); drawThumbs(); }));
 }
-function formDirty() { return !!(S.draft.coords || S.draft.photos.length || [...$("#form").querySelectorAll("[data-i]")].some((x) => x.value.trim())); }
+function formDirty() { return !!(S.draft.coords || S.draft.photos.length || [...$("#form").querySelectorAll("[data-i]:not([data-auto=\"fecha\"]):not([data-auto=\"hora\"])")].some((x) => x.value.trim())); }
 function closeForm() { S.draft?.photos.forEach((p) => URL.revokeObjectURL(p.url)); S.draft = null; goHome(); }
 
 async function saveRecord() {
@@ -344,9 +370,13 @@ async function saveRecord() {
   const values = new Array(S.columns.length).fill(""); values[0] = d.clave; values[1] = d.coords;
   let missing = null;
   $("#form").querySelectorAll("[data-i]").forEach((el) => { const i = +el.dataset.i; values[i] = el.value.trim().replace(/\s+/g, " "); if (!missing && isRequired(S.columns[i]) && !values[i]) { missing = { el, h: S.columns[i] }; } });
+  // FECHA y HORA: se llenan con los del momento solo si están en blanco (si ya traen dato, se conserva)
+  S.columns.forEach((h, i) => { if (i < 2) return; const k = autoKind(h); if ((k === "fecha" || k === "hora") && !values[i]) values[i] = nowFor(k); });
+  const ci = S.columns.findIndex((h, i) => i >= 2 && autoKind(h) === "concluye");
   if (CONFIG.REQUIRE_COORDS && !d.coords) return toast("Falta tomar la coordenada", "err");
   if (missing) { missing.el.focus(); return toast(`Falta completar: ${missing.h}`, "err"); }
   if (CONFIG.REQUIRE_PHOTO && !d.photos.length) return toast("Agrega al menos una fotografía", "err");
+  if (ci >= 0 && !values[ci] && CONFIG.CONCLUYE_CONFIRM_EMPTY !== false && !confirm(`No has pulsado «Llenar» en ${S.columns[ci]}.\n¿Guardar el registro sin esa hora?`)) return;
   if (S.records.some((r) => r.clave === d.clave)) { d.clave = nextClave(); values[0] = d.clave; }
 
   btn.disabled = true;
@@ -379,7 +409,7 @@ function openList() {
 async function showRecord(clave) {
   const r = S.records.find((x) => x.clave === clave);
   $("#recTitle").textContent = r.clave;
-  $("#recBody").innerHTML = S.columns.map((h, i) => `<dt>${esc(h)}</dt><dd>${esc(r.values[i]) || "—"}</dd>`).join("");
+  $("#recBody").innerHTML = S.columns.map((h, i) => !h ? "" : `<dt>${esc(h)}</dt><dd>${esc(r.values[i]) || "—"}</dd>`).join("");
   const ph = await Promise.all(r.photos.map((n) => dbGet("photos", n)));
   $("#recPhotos").innerHTML = ph.filter(Boolean).map((p) => `<div class="thumb"><img src="${URL.createObjectURL(p.blob)}" alt=""><em>${esc(p.name)}</em></div>`).join("");
   $("#dlgRec").showModal();
@@ -595,8 +625,8 @@ function initSettings() {
     const f = e.target.files[0]; if (!f) return; const msg = $("#cfgFileMsg");
     if (!(await canChangeStructure(msg))) { e.target.value = ""; return; }
     handleExcelFile(f, "#setSheet", "#setSheetBox", msg, async (cols) => {
-      if (!cols) return; if (cols.length < 3) { msg.textContent = "⚠ El Excel debe tener al menos 3 columnas."; return; }
-      S.columns = cols; await saveMeta(); msg.textContent = `✔ Estructura actualizada (${cols.length} campos).`;
+      if (!cols) return; if (nCols(cols) < 3) { msg.textContent = "⚠ El Excel debe tener al menos 3 columnas."; return; }
+      S.columns = cols; await saveMeta(); msg.textContent = `✔ Estructura actualizada (${nCols(cols)} campos).`;
     });
   };
   $("#cfgDefault").onclick = async () => {
@@ -604,7 +634,7 @@ function initSettings() {
     if (!(await canChangeStructure(msg))) return;
     try {
       const r = await fetch(CONFIG.DEFAULT_EXCEL, { cache: "no-store" }); if (!r.ok) throw 0;
-      handleExcelFile(await r.blob(), "#setSheet", "#setSheetBox", msg, async (cols) => { if (!cols) return; S.columns = cols; await saveMeta(); msg.textContent = `✔ Estructura recargada desde ${CONFIG.DEFAULT_EXCEL} (${cols.length} campos).`; });
+      handleExcelFile(await r.blob(), "#setSheet", "#setSheetBox", msg, async (cols) => { if (!cols) return; S.columns = cols; await saveMeta(); msg.textContent = `✔ Estructura recargada desde ${CONFIG.DEFAULT_EXCEL} (${nCols(cols)} campos).`; });
     } catch { msg.textContent = `⚠ No se encontró ${CONFIG.DEFAULT_EXCEL}.`; }
   };
   const exp = (recs, kind, name) => {
