@@ -46,7 +46,7 @@ async function loadState() {
   S.counters = (await dbGet("meta", "counters")) || {};
   S.jornada = (await dbGet("meta", "jornada")) || null;
   S.closed = (await dbGet("meta", "closed")) || {};
-  S.tracking = !!(await dbGet("meta", "tracking"));
+  S.tracking = !!(await dbGet("meta", "tracking")); S.trackStopDay = (await dbGet("meta", "trackStopDay")) || null;
   S.records = (await dbAll("records")).sort((a, b) => a.savedAt.localeCompare(b.savedAt));
 }
 
@@ -247,7 +247,7 @@ function initSetup() {
       if (setupCols.length < 3) return toast("El Excel debe tener al menos 3 columnas", "err");
       S.columns = setupCols;
     }
-    S.verifier = { name, initials: ini }; await saveMeta(); goHome();
+    S.verifier = { name, initials: ini }; await saveMeta(); goHome(); autoTrack();
   };
   show("setup"); refreshSetup();
 }
@@ -277,7 +277,7 @@ const optsOf = (h) => { const k = Object.keys(CONFIG.FIELD_OPTIONS).find((x) => 
 const isRequired = (h) => CONFIG.REQUIRE_ALL_FIELDS || CONFIG.REQUIRED_FIELDS.some((x) => key(x) === key(h));
 
 function openForm() {
-  if (!T.on && !S.jornada) startTracking();
+  if (!T.on) startTracking();
   S.draft = { clave: nextClave(), coords: "", acc: null, photos: [] };
   const f = $("#form");
   let html = `<div class="card">`;
@@ -388,7 +388,7 @@ async function showRecord(clave) {
 /* ------------------------------------------------------------------ */
 /*  Seguimiento en tiempo real (lo ve monitor.html)                    */
 /* ------------------------------------------------------------------ */
-const T = { on: false, watch: null, timer: null, wake: null, last: null, lastSent: 0, err: null, sentOk: null };
+const T = { on: false, watch: null, timer: null, wake: null, last: null, lastSent: 0, err: null, sentOk: null, errMsg: "" };
 const trackAvailable = () => CONFIG.TRACKING_ENABLED && !!CONFIG.DRIVE_UPLOAD_URL && !!navigator.geolocation;
 
 async function sendPing(status) {
@@ -398,9 +398,16 @@ async function sendPing(status) {
     const r = await fetch(CONFIG.DRIVE_UPLOAD_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
       body: JSON.stringify({ token: CONFIG.DRIVE_TOKEN, action: "ping", id: S.verifier.initials, name: S.verifier.name, status,
         lat: p.lat, lng: p.lng, acc: p.acc, registros: jornadaRecords().length }) });
-    const j = await r.json(); if (!j.ok) throw new Error(j.error);
-    T.lastSent = Date.now(); T.sentOk = true;
-  } catch { T.sentOk = false; }
+    const j = await r.json().catch(() => { throw new Error("RESP"); });
+    if (!j.ok) throw new Error(j.error || "Error desconocido");
+    T.lastSent = Date.now(); T.sentOk = true; T.errMsg = "";
+  } catch (e) {
+    T.sentOk = false; const m = String(e.message || e);
+    T.errMsg = e instanceof TypeError ? "No hay conexión con el receptor (sin internet o URL incorrecta en config.js)."
+      : m === "RESP" ? "Respuesta no válida: en Apps Script la implementación debe ser «Cualquier persona» y la URL terminar en /exec."
+      : /Tipo de archivo|Nombre de archivo|Carpeta no v/i.test(m) ? "El receptor de Google NO está actualizado: pega el nuevo drive-receptor.gs y publica una Nueva versión."
+      : /Token/i.test(m) ? "El token no coincide: DRIVE_TOKEN (config.js) debe ser igual a TOKEN (drive-receptor.gs)." : m;
+  }
   updateTrackUI();
 }
 async function keepAwake() {
@@ -421,20 +428,27 @@ function startTracking() {
   T.timer = setInterval(() => sendPing("on"), Math.max(15, CONFIG.TRACK_INTERVAL_SEC) * 1000);
   keepAwake(); updateTrackUI();
 }
+const autoTrack = () => { if (!T.on && S.trackStopDay !== today()) startTracking(); };
 async function stopTracking() {
   if (!T.on) return;
   navigator.geolocation.clearWatch(T.watch); clearInterval(T.timer); T.on = false; S.tracking = false;
-  await dbPut("meta", false, "tracking");
+  await dbPut("meta", false, "tracking"); S.trackStopDay = today(); await dbPut("meta", S.trackStopDay, "trackStopDay");
   try { await T.wake?.release(); } catch {} T.wake = null;
   await sendPing("off"); T.last = null; updateTrackUI();
 }
 function updateTrackUI() {
   const c = $("#trackCard"); if (!c) return; c.hidden = !trackAvailable(); if (c.hidden) return;
   const st = $("#trackState"), sub = $("#trackSub"), b = $("#btnTrack");
-  if (!T.on) { st.textContent = "📡 Ubicación NO compartida"; sub.textContent = "La central no ve tu posición."; b.textContent = "▶ Iniciar jornada y compartir ubicación"; b.hidden = false; return; }
+  b.hidden = true;
+  if (!T.on) {
+    const closed = S.trackStopDay === today();
+    st.textContent = closed ? "📡 Jornada cerrada: ubicación detenida" : "📡 Ubicación NO compartida";
+    sub.textContent = closed ? "Se activará de nuevo en tu próxima jornada." : "La central no ve tu posición."; b.textContent = "▶ Activar ubicación"; b.hidden = closed; return;
+  }
   st.textContent = T.err ? "⚠ Sin ubicación" : "📡 Ubicación compartida con la central";
-  sub.textContent = T.err ? "Activa el permiso de ubicación del navegador." : T.sentOk === false ? "Sin conexión: se reintentará." : T.lastSent ? "Último envío: " + new Date(T.lastSent).toTimeString().slice(0, 5) : "Obteniendo señal GPS…";
-  b.textContent = "⏸ Pausar"; b.hidden = !CONFIG.TRACK_ALLOW_PAUSE;
+  sub.textContent = T.err ? (T.err.code === 1 ? "Permiso de ubicación denegado: actívalo en los ajustes del navegador para este sitio." : "Buscando señal GPS… sal a un lugar abierto.")
+    : T.errMsg ? "⚠ No se pudo enviar: " + T.errMsg
+    : T.lastSent ? "Último envío: " + new Date(T.lastSent).toTimeString().slice(0, 5) : "Obteniendo señal GPS…";
 }
 document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && T.on) { keepAwake(); sendPing("on"); } });
 
@@ -520,19 +534,47 @@ async function closeJornada() {
       if (navigator.canShare?.({ files: test })) { share.hidden = false; share.onclick = () => navigator.share({ files: test, title: base }).catch(() => {}); }
     }
     bar.style.width = "100%";
-    S.closed[S.jornada] = n + 1; S.jornada = null; closeState = null; await stopTracking(); await saveMeta();
+    // Cierre ATÓMICO: guardar el Excel en la app, marcar la jornada como cerrada y limpiar, todo en una sola
+    // transacción. Si algo falla no se cambia nada (la jornada sigue abierta y los datos intactos).
+    const newClosed = { ...S.closed, [S.jornada]: n + 1 };
     await new Promise((res, rej) => {
-      const t = db.transaction(["records", "photos", "archive"], "readwrite");
+      const t = db.transaction(["records", "photos", "archive", "meta"], "readwrite");
       t.objectStore("archive").put({ name: base + ".xlsx", blob: xlsx, savedAt: new Date().toISOString() });
       if (CONFIG.CLEAR_ON_CLOSE) { t.objectStore("records").clear(); t.objectStore("photos").clear(); }
-      t.oncomplete = res; t.onerror = t.onabort = () => rej(t.error);
+      t.objectStore("meta").put(newClosed, "closed"); t.objectStore("meta").put(null, "jornada");
+      t.oncomplete = res; t.onerror = t.onabort = () => rej(t.error || new Error("La base de datos del teléfono canceló la operación"));
     });
+    S.closed = newClosed; S.jornada = null; closeState = null;
     if (CONFIG.CLEAR_ON_CLOSE) { S.records = []; say("✔ Memoria de la aplicación limpiada"); }
+    try { await stopTracking(); } catch {}
   } catch (err) {
-    say("✖ " + (err.message || err)); $("#closeMsg").textContent = "No se pudo completar. La jornada sigue abierta; puedes reintentar.";
+    say("✖ " + (err && err.name && err.name !== "Error" ? err.name + ": " : "") + (err.message || err)); $("#closeMsg").textContent = "No se pudo completar. La jornada sigue abierta; puedes reintentar.";
   }
   ok.disabled = false; dlg.oncancel = null; closing = false;
   ok.onclick = () => { dlg.close(); goHome(); };
+}
+
+/* Registros que quedaron de jornadas ya cerradas (por ejemplo, un cierre que se interrumpió):
+   se guarda su Excel en la app y se borran registros y fotos. */
+async function purgeClosed() {
+  const orphan = S.records.filter((r) => r.jornada !== S.jornada);
+  if (!orphan.length) return 0;
+  const groups = {}; orphan.forEach((r) => (groups[r.jornada] ||= []).push(r));
+  const t = db.transaction(["records", "photos", "archive"], "readwrite");
+  Object.keys(groups).forEach((j) => t.objectStore("archive").put({ name: `${S.verifier.initials}_${j}_recuperado.xlsx`, blob: buildXlsx(S.columns, rowsOf(groups[j])), savedAt: new Date().toISOString() }));
+  orphan.forEach((r) => { t.objectStore("records").delete(r.clave); r.photos.forEach((n) => t.objectStore("photos").delete(n)); });
+  await new Promise((res, rej) => { t.oncomplete = res; t.onerror = t.onabort = () => rej(t.error); });
+  S.records = S.records.filter((r) => r.jornada === S.jornada);
+  return orphan.length;
+}
+async function canChangeStructure(msg) {
+  if (jornadaRecords().length) { msg.textContent = "⚠ Hay una jornada abierta con registros. Primero usa «Cierre de jornada»."; return false; }
+  const old = S.records.filter((r) => r.jornada !== S.jornada).length;
+  if (old) {
+    if (!confirm(`Hay ${old} registro(s) de jornadas ya cerradas guardados en la app.\nSu Excel se conserva (Descargar TODO) y se borrarán los registros y fotos de la app.\n¿Continuar?`)) { msg.textContent = "Cancelado."; return false; }
+    await purgeClosed();
+  }
+  return true;
 }
 
 /* ------------------------------------------------------------------ */
@@ -549,9 +591,9 @@ function initSettings() {
     if (name.length < 3 || ini.length < 2) return toast("Revisa nombre e iniciales", "err");
     S.verifier = { name, initials: ini }; await saveMeta(); $("#dlgSet").close(); toast("Datos actualizados", "ok"); goHome();
   };
-  $("#cfgFile").onchange = (e) => {
+  $("#cfgFile").onchange = async (e) => {
     const f = e.target.files[0]; if (!f) return; const msg = $("#cfgFileMsg");
-    if (S.records.length) { msg.textContent = "⚠ Ya existen registros capturados; no se puede cambiar la estructura."; e.target.value = ""; return; }
+    if (!(await canChangeStructure(msg))) { e.target.value = ""; return; }
     handleExcelFile(f, "#setSheet", "#setSheetBox", msg, async (cols) => {
       if (!cols) return; if (cols.length < 3) { msg.textContent = "⚠ El Excel debe tener al menos 3 columnas."; return; }
       S.columns = cols; await saveMeta(); msg.textContent = `✔ Estructura actualizada (${cols.length} campos).`;
@@ -559,7 +601,7 @@ function initSettings() {
   };
   $("#cfgDefault").onclick = async () => {
     const msg = $("#cfgFileMsg");
-    if (S.records.length) return (msg.textContent = "⚠ Ya existen registros capturados; no se puede cambiar la estructura.");
+    if (!(await canChangeStructure(msg))) return;
     try {
       const r = await fetch(CONFIG.DEFAULT_EXCEL, { cache: "no-store" }); if (!r.ok) throw 0;
       handleExcelFile(await r.blob(), "#setSheet", "#setSheetBox", msg, async (cols) => { if (!cols) return; S.columns = cols; await saveMeta(); msg.textContent = `✔ Estructura recargada desde ${CONFIG.DEFAULT_EXCEL} (${cols.length} campos).`; });
@@ -571,11 +613,18 @@ function initSettings() {
   };
   $("#cfgXlsx").onclick = () => exp(jornadaRecords(), "xlsx", fileBase() + ".xlsx");
   $("#cfgCsv").onclick = () => exp(jornadaRecords(), "csv", fileBase() + ".csv");
+  $("#cfgPurge").onclick = async () => {
+    const n = S.records.filter((r) => r.jornada !== S.jornada).length;
+    if (!n) return toast("No hay registros de jornadas cerradas", "ok");
+    if (!confirm(`Se borrarán ${n} registro(s) y sus fotos de jornadas ya cerradas. Su Excel queda guardado en la app.\nSi no los has descargado, pulsa Cancelar y usa «Descargar TODO» primero.`)) return;
+    try { toast(`Se limpiaron ${await purgeClosed()} registro(s)`, "ok"); goHome(); } catch (err) { toast("No se pudo limpiar: " + (err.message || err), "err"); }
+  };
   $("#cfgZip").onclick = async () => {
     const u8 = async (b) => new Uint8Array(await b.arrayBuffer()), files = [];
     for (const a of await dbAll("archive")) files.push({ name: "Excel/" + a.name, data: await u8(a.blob) });
-    const cur = jornadaRecords();
-    if (cur.length) files.push({ name: `Excel/${fileBase()}_EN_CURSO.xlsx`, data: await u8(buildXlsx(S.columns, rowsOf(cur))) });
+    const groups = {}; S.records.forEach((r) => (groups[r.jornada] ||= []).push(r));
+    for (const j of Object.keys(groups))
+      files.push({ name: `Excel/${S.verifier.initials}_${j}_${j === S.jornada ? "EN_CURSO" : "EN_APP"}.xlsx`, data: await u8(buildXlsx(S.columns, rowsOf(groups[j]))) });
     for (const p of await dbAll("photos")) files.push({ name: "Fotos/" + p.name, data: await u8(p.blob) });
     if (!files.length) return toast("No hay archivos para descargar", "err");
     download(zipStore(files), `${S.verifier.initials}_TODO_${today()}.zip`); toast(`ZIP con ${files.length} archivo(s)`, "ok");
@@ -600,10 +649,10 @@ async function boot() {
   initSettings();
   $("#btnNew").onclick = openForm; $("#btnList").onclick = openList; $("#btnListBack").onclick = goHome; $("#btnClose").onclick = closeJornada;
   $("#btnSave").onclick = saveRecord;
-  $("#btnTrack").onclick = () => (T.on ? stopTracking() : startTracking());
+  $("#btnTrack").onclick = () => { T.err = null; startTracking(); };   // no hay botón para pausar: solo se detiene al cerrar la jornada
   $("#btnCancel").onclick = () => { if (!formDirty() || confirm("¿Descartar este registro? Se perderán los datos capturados.")) closeForm(); };
 
-  if (!S.columns.length || !S.verifier) initSetup(); else { goHome(); if (S.tracking) startTracking(); }
+  if (!S.columns.length || !S.verifier) initSetup(); else { goHome(); autoTrack(); }
   if ("serviceWorker" in navigator && location.protocol.startsWith("http")) navigator.serviceWorker.register("sw.js").catch(() => {});
 }
 boot();
