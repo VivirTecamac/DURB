@@ -302,7 +302,8 @@ function openForm() {
   let html = `<div class="card">`;
   html += `<label class="f"><span>${esc(S.columns[0])} (automática)</span><div class="lock"><input id="fClave" readonly value="${esc(S.draft.clave)}" aria-readonly="true"><span aria-hidden="true">🔒</span></div></label>`;
   html += `<div class="f"><span class="lbl">${esc(S.columns[1])}</span><div class="coordbox" id="coordBox"><div class="val" id="coordVal">Sin capturar</div><div class="muted" id="coordAcc"></div>
-    <button type="button" class="btn small" id="btnGps" style="margin-top:10px">📍 Tomar coordenada de mi ubicación</button></div></div>`;
+    <div class="gpsrow"><button type="button" class="btn small" id="btnGps">📍 Tomar coordenada de mi ubicación</button>
+    <button type="button" class="btn small alt" id="btnGpsOff">🛰 Sin señal (sin internet)</button></div></div></div>`;
   S.columns.slice(2).forEach((h, i) => {
     if (!h) return;   // columna en blanco del Excel: se conserva en el archivo exportado pero no se captura
     const t = typeOf(h), idx = i + 2, req = isRequired(h) ? " *" : "";
@@ -319,25 +320,57 @@ function openForm() {
     <button type="button" class="btn alt small" id="btnPhoto">📷 Tomar foto</button>
     <div class="thumbs" id="thumbs"></div></div>`;
   f.innerHTML = html;
-  $("#btnGps").onclick = captureGps;
+  $("#btnGps").onclick = captureGps; $("#btnGpsOff").onclick = captureGpsOffline;
   $("#btnPhoto").onclick = () => $("#fPhoto").click();
   $("#fPhoto").onchange = addPhoto;
   show("form");
 }
 
+const GPS_BTN = { on: "📍 Tomar coordenada de mi ubicación", off: "🛰 Sin señal (sin internet)" };
+function gpsBusy(busy, which) {
+  $("#btnGps").disabled = $("#btnGpsOff").disabled = busy;
+  if (!busy) { $("#btnGps").textContent = S.draft?.coords ? "📍 Volver a tomar coordenada" : GPS_BTN.on; $("#btnGpsOff").textContent = GPS_BTN.off; }
+}
+/* Guarda la coordenada en el MISMO campo para los dos botones (así la validación de "falta coordenada" no falla) */
+function applyFix(p, modo) {
+  const lat = p.coords.latitude.toFixed(6), lng = p.coords.longitude.toFixed(6);
+  S.draft.coords = `${lat},${lng}`; S.draft.acc = Math.round(p.coords.accuracy);
+  $("#coordVal").textContent = `${lat}, ${lng}`;
+  $("#coordAcc").textContent = `Precisión aproximada: ±${S.draft.acc} m · ${modo}` + (S.draft.acc > 50 ? " — precisión baja: repite la captura a cielo abierto" : "");
+  $("#coordBox").classList.add("ok");
+}
+const gpsError = (err) => err.code === 1 ? "Permiso de ubicación denegado. Actívalo en los ajustes del navegador para este sitio."
+  : err.code === 2 ? "Señal satelital no disponible. Aléjate de techos y árboles densos." : "Tiempo agotado. Intenta de nuevo bajo cielo despejado.";
+
 function captureGps() {
-  const btn = $("#btnGps");
   if (!navigator.geolocation) return toast("Este dispositivo no tiene GPS disponible", "err");
-  btn.disabled = true; btn.textContent = "Buscando señal GPS…";
-  navigator.geolocation.getCurrentPosition((p) => {
-    const lat = p.coords.latitude.toFixed(6), lng = p.coords.longitude.toFixed(6);
-    S.draft.coords = `${lat},${lng}`; S.draft.acc = Math.round(p.coords.accuracy);
-    $("#coordVal").textContent = `${lat}, ${lng}`; $("#coordAcc").textContent = `Precisión aproximada: ±${S.draft.acc} m`;
-    $("#coordBox").classList.add("ok"); btn.disabled = false; btn.textContent = "📍 Volver a tomar coordenada";
-  }, (err) => {
-    btn.disabled = false; btn.textContent = "📍 Tomar coordenada de mi ubicación";
-    toast(err.code === 1 ? "Permiso de ubicación denegado. Actívalo en los ajustes del navegador." : "No se pudo obtener la ubicación. Intenta al aire libre.", "err");
-  }, { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 });
+  gpsBusy(true); $("#btnGps").textContent = "Buscando señal GPS…";
+  navigator.geolocation.getCurrentPosition((p) => { applyFix(p, navigator.onLine ? "Con red" : "Sin internet (satélite)"); gpsBusy(false); },
+    (err) => { gpsBusy(false); toast(gpsError(err), "err"); }, { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 });
+}
+
+/* Modo SIN SEÑAL: usa solo el chip GPS satelital y espera hasta GPS_OFFLINE_SECONDS segundos (sin internet el
+   primer punto tarda más). Se queda con el punto más preciso que logre y lo guarda en el campo de coordenada. */
+function captureGpsOffline() {
+  if (!navigator.geolocation) return toast("Este dispositivo no tiene GPS disponible", "err");
+  const maxMs = (CONFIG.GPS_OFFLINE_SECONDS || 45) * 1000, good = CONFIG.GPS_OFFLINE_GOOD_METERS || 10, t0 = Date.now();
+  let best = null, lastErr = null, done = false, id = null, tick = null;
+  gpsBusy(true); $("#coordAcc").textContent = "Buscando satélites… mantente quieto en el terreno.";
+  const finish = () => {
+    if (done) return; done = true; navigator.geolocation.clearWatch(id); clearInterval(tick); gpsBusy(false);
+    if (best) { applyFix(best, "Sin señal (GPS satelital)"); toast("Coordenada guardada", "ok"); }
+    else { $("#coordAcc").textContent = ""; toast(lastErr ? gpsError(lastErr) : "No se obtuvo señal GPS. Intenta de nuevo bajo cielo despejado.", "err"); }
+  };
+  id = navigator.geolocation.watchPosition((p) => {
+    if (!best || p.coords.accuracy < best.coords.accuracy) best = p;
+    if (p.coords.accuracy <= good) finish();
+  }, (err) => { lastErr = err; if (err.code === 1) finish(); },   // permiso denegado: se corta; otros errores se siguen intentando
+  { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 });
+  tick = setInterval(() => {
+    const s = Math.max(0, Math.round((maxMs - (Date.now() - t0)) / 1000));
+    $("#btnGpsOff").textContent = `🛰 Buscando… ${s} s` + (best ? ` (±${Math.round(best.coords.accuracy)} m)` : "");
+    if (Date.now() - t0 >= maxMs) finish();
+  }, 500);
 }
 
 async function shrink(file) {
