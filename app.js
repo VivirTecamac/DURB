@@ -290,8 +290,8 @@ function fmtNow(pattern, d = new Date()) {
 }
 const nowFor = (kind) => (kind === "fecha" ? fmtNow(CONFIG.DATE_FORMAT || "DD/MM/YYYY") : fmtNow(CONFIG.TIME_FORMAT || "HH:mm"));
 function autoFieldHtml(h, idx, kind) {
-  if (kind === "concluye")
-    return `<div class="f" style="margin-bottom:14px"><span class="lbl">${esc(h)}</span><div class="lock"><input data-i="${idx}" data-auto="concluye" readonly placeholder="Sin llenar" value=""><button type="button" class="btn small" id="btnConcluye">Llenar</button></div></div>`;
+  if (kind === "concluye")   // se llena sola al pulsar Guardar; visible y no editable
+    return `<label class="f"><span>${esc(h)} (se llena al guardar)</span><div class="lock"><input data-i="${idx}" data-auto="concluye" readonly placeholder="Se llena al guardar" value=""><span aria-hidden="true">🔒</span></div></label>`;
   return `<label class="f"><span>${esc(h)} (automático)</span><div class="lock"><input data-i="${idx}" data-auto="${kind}" readonly value="${esc(nowFor(kind))}"><span aria-hidden="true">🔒</span></div></label>`;
 }
 
@@ -322,11 +322,6 @@ function openForm() {
   $("#btnGps").onclick = captureGps;
   $("#btnPhoto").onclick = () => $("#fPhoto").click();
   $("#fPhoto").onchange = addPhoto;
-  const bc = $("#btnConcluye");
-  if (bc) bc.onclick = () => {
-    const inp = $('[data-auto="concluye"]'); if (inp.value && !CONFIG.CONCLUYE_REFILL) return;
-    inp.value = nowFor("hora"); bc.textContent = CONFIG.CONCLUYE_REFILL ? "Actualizar hora" : "✔ Llenado"; bc.disabled = !CONFIG.CONCLUYE_REFILL;
-  };
   show("form");
 }
 
@@ -367,16 +362,16 @@ function closeForm() { S.draft?.photos.forEach((p) => URL.revokeObjectURL(p.url)
 
 async function saveRecord() {
   const d = S.draft, btn = $("#btnSave");
+  // PRIMERA instrucción: CONCLUYE (HR) se llena con la hora de este momento (así nunca queda vacío al validar)
+  const cInp = $('[data-auto="concluye"]'); if (cInp) cInp.value = nowFor("hora");
   const values = new Array(S.columns.length).fill(""); values[0] = d.clave; values[1] = d.coords;
   let missing = null;
   $("#form").querySelectorAll("[data-i]").forEach((el) => { const i = +el.dataset.i; values[i] = el.value.trim().replace(/\s+/g, " "); if (!missing && isRequired(S.columns[i]) && !values[i]) { missing = { el, h: S.columns[i] }; } });
   // FECHA y HORA: se llenan con los del momento solo si están en blanco (si ya traen dato, se conserva)
   S.columns.forEach((h, i) => { if (i < 2) return; const k = autoKind(h); if ((k === "fecha" || k === "hora") && !values[i]) values[i] = nowFor(k); });
-  const ci = S.columns.findIndex((h, i) => i >= 2 && autoKind(h) === "concluye");
   if (CONFIG.REQUIRE_COORDS && !d.coords) return toast("Falta tomar la coordenada", "err");
   if (missing) { missing.el.focus(); return toast(`Falta completar: ${missing.h}`, "err"); }
   if (CONFIG.REQUIRE_PHOTO && !d.photos.length) return toast("Agrega al menos una fotografía", "err");
-  if (ci >= 0 && !values[ci] && CONFIG.CONCLUYE_CONFIRM_EMPTY !== false && !confirm(`No has pulsado «Llenar» en ${S.columns[ci]}.\n¿Guardar el registro sin esa hora?`)) return;
   if (S.records.some((r) => r.clave === d.clave)) { d.clave = nextClave(); values[0] = d.clave; }
 
   btn.disabled = true;

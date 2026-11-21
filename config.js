@@ -60,13 +60,11 @@ const CONFIG = {
   /* ---------- Campos automáticos (se reconocen por el ENCABEZADO de la columna del Excel) ----------
      "fecha"     -> se llena sola con la fecha de hoy si está en blanco; visible y NO editable
      "hora"      -> se llena sola con la hora actual si está en blanco; visible y NO editable
-     "concluye"  -> queda vacío hasta que el verificador pulsa «Llenar» (hora de ese momento); NO editable
+     "concluye"  -> se llena sola con la hora en que se pulsa «Guardar»; visible y NO editable
      Puedes agregar más encabezados o cambiar los nombres.                                            */
   AUTO_FIELDS: { "FECHA": "fecha", "HORA": "hora", "CONCLUYE (HR)": "concluye" },
   DATE_FORMAT: "DD/MM/YYYY",       // Tokens: DD MM YYYY
   TIME_FORMAT: "HH:mm",            // Tokens: HH mm ss  (24 horas)
-  CONCLUYE_REFILL: false,          // false = «Llenar» solo se puede pulsar una vez por registro
-  CONCLUYE_CONFIRM_EMPTY: true,    // Al guardar, avisa si no se pulsó «Llenar»
 
   FOLIO_DIGITS:    3,      // JSG001 -> 3 dígitos
   REQUIRE_COORDS:  true,   // Obligar a tomar la coordenada antes de guardar
