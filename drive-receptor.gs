@@ -31,6 +31,7 @@ function doPost(e) {
     if (d.token !== TOKEN) return out({ ok: false, error: "Token incorrecto" });
 
     if (d.action === "ping") return savePing(d);
+    if (d.action === "verify") return verifyFolder(d);
 
     // ---- Subida de archivos a Drive ----
     if (!/^[\w.\- ]+$/.test(d.fileName)) return out({ ok: false, error: "Nombre de archivo no válido" });
@@ -43,8 +44,11 @@ function doPost(e) {
     const old = folder.getFilesByName(d.fileName);
     while (old.hasNext()) old.next().setTrashed(true);
 
-    folder.createFile(Utilities.newBlob(Utilities.base64Decode(d.data), d.mimeType, d.fileName));
-    return out({ ok: true });
+    const bytes = Utilities.base64Decode(d.data);
+    const file = folder.createFile(Utilities.newBlob(bytes, d.mimeType, d.fileName));
+    // Comprobación inmediata: lo que quedó en Drive debe pesar igual que lo recibido
+    if (file.getSize() !== bytes.length) { file.setTrashed(true); return out({ ok: false, error: "Archivo incompleto en Drive: " + d.fileName }); }
+    return out({ ok: true, size: file.getSize() });
   } catch (err) {
     return out({ ok: false, error: String(err) });
   }
@@ -110,4 +114,36 @@ function getOrCreate(parent, name) {
 }
 function out(o) {
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
+}
+
+
+/**
+ * VERIFICACIÓN: la app envía la lista de archivos esperados (nombre y tamaño) y aquí se comprueba
+ * en Drive que cada uno exista y pese lo mismo. Devuelve los que faltan o están incompletos.
+ */
+function verifyFolder(d) {
+  if (!/^[\w.\- \/\u00C0-\u017F]+$/.test(d.folder) || d.folder.indexOf("..") >= 0) return out({ ok: false, error: "Carpeta no válida" });
+  if (!Array.isArray(d.files) || d.files.length > 500) return out({ ok: false, error: "Lista de archivos no válida" });
+  const names = d.files.map(function (f) { return String(f.name); });
+  let folder = DriveApp.getRootFolder();
+  const parts = d.folder.split("/");
+  for (let i = 0; i < parts.length; i++) {
+    const it = folder.getFoldersByName(parts[i]);
+    if (!it.hasNext()) return out({ ok: true, total: names.length, missing: names, bad: [] });
+    folder = it.next();
+  }
+  const missing = [], bad = [];
+  d.files.forEach(function (f) {
+    if (!/^[\w.\- ]+$/.test(f.name)) { bad.push(f.name); return; }
+    const it = folder.getFilesByName(f.name);
+    let found = false, sizeOk = false;
+    while (it.hasNext()) {
+      const x = it.next();
+      if (x.isTrashed()) continue;
+      found = true;
+      if (x.getSize() === f.size) sizeOk = true;
+    }
+    if (!found) missing.push(f.name); else if (!sizeOk) bad.push(f.name);
+  });
+  return out({ ok: true, total: names.length, missing: missing, bad: bad });
 }

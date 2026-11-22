@@ -521,14 +521,33 @@ const fileBase = (suffix = "") => `${S.verifier.initials}_${S.jornada || today()
 const rowsOf = (recs) => recs.map((r) => r.values);
 
 function blobToB64(blob) { return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(",")[1]); fr.onerror = () => rej(fr.error); fr.readAsDataURL(blob); }); }
-async function driveUpload(folder, fileName, mimeType, blob) {
+async function driveCall(payload) {
   let r;
   try {
     r = await fetch(CONFIG.DRIVE_UPLOAD_URL, { method: "POST", headers: { "Content-Type": "text/plain;charset=utf-8" },
-      body: JSON.stringify({ token: CONFIG.DRIVE_TOKEN, folder, fileName, mimeType, data: await blobToB64(blob) }) });
+      body: JSON.stringify({ token: CONFIG.DRIVE_TOKEN, ...payload }) });
   } catch { throw new Error("No se pudo conectar con el receptor de Drive. Revisa DRIVE_UPLOAD_URL en config.js y que la implementación esté como «Cualquier persona»."); }
-  const j = await r.json().catch(() => ({ ok: false, error: "Respuesta no válida del receptor (HTTP " + r.status + "). Revisa que la URL termine en /exec y que hayas publicado una nueva versión." }));
-  if (!j.ok) throw new Error(j.error || "Error desconocido");
+  return r.json().catch(() => ({ ok: false, error: "Respuesta no válida del receptor (HTTP " + r.status + "). Revisa que la URL termine en /exec y que hayas publicado una nueva versión." }));
+}
+// Envía un archivo; reintenta hasta 3 veces si hay fallas de red o respuestas inválidas
+async function driveUpload(folder, fileName, mimeType, blob) {
+  const data = await blobToB64(blob); let lastErr;
+  for (let n = 1; n <= 3; n++) {
+    try {
+      const j = await driveCall({ folder, fileName, mimeType, data });
+      if (j.ok) return;
+      lastErr = new Error(j.error || "Error desconocido");
+      if (/Token|Tipo de archivo|Nombre de archivo|Carpeta no v/i.test(lastErr.message)) throw lastErr;   // errores que reintentar no arregla
+    } catch (e) { lastErr = e; if (/Token|Tipo de archivo|Nombre de archivo|Carpeta no v/i.test(e.message)) throw e; }
+    if (n < 3) await new Promise((r) => setTimeout(r, 1500 * n));
+  }
+  throw lastErr;
+}
+// Pregunta al receptor qué archivos de la lista faltan o están incompletos en Drive. null = receptor sin verificación (versión vieja)
+async function driveVerify(folder, files) {
+  const j = await driveCall({ action: "verify", folder, files });
+  if (!j.ok) { if (/Tipo de archivo|Nombre de archivo|Carpeta no v/i.test(j.error || "")) return null; throw new Error(j.error || "Error al verificar"); }
+  return [...(j.missing || []), ...(j.bad || [])];
 }
 
 let closeState = null, closing = false;
@@ -583,8 +602,21 @@ async function closeJornada() {
         pend[i].uploaded = true; await dbPut("photos", pend[i]); say("✔ " + pend[i].name);
         bar.style.width = 20 + Math.round(((i + 1) / pend.length) * 80) + "%";
       }
+      // 3) VERIFICACIÓN: se comprueba en Drive que cada archivo exista y pese lo mismo; lo que falte se reenvía
+      const items = [{ name: base + ".xlsx", size: xlsx.size, mime: XLSX_MIME, blob: xlsx }, ...photos.map((p) => ({ name: p.name, size: p.blob.size, mime: "image/jpeg", blob: p.blob }))];
+      say(`Verificando en Drive (${items.length} archivos)…`);
+      let verified = false;
+      for (let pass = 1; ; pass++) {
+        const bad = await driveVerify(folder, items.map(({ name, size }) => ({ name, size })));
+        if (bad === null) { say("⚠ El receptor de Google no tiene verificación: pega el nuevo drive-receptor.gs y publica una Nueva versión."); break; }
+        if (!bad.length) { say(`✔ Verificado: ${items.length} de ${items.length} archivos están completos en Drive`); verified = true; break; }
+        say(`⚠ Faltan o están incompletos ${bad.length}: ${bad.slice(0, 4).join(", ")}${bad.length > 4 ? "…" : ""}`);
+        if (pass > 3) throw new Error(`No se pudieron verificar ${bad.length} archivo(s) en Drive. La jornada sigue abierta: reintenta el cierre con buena señal.`);
+        say(`Reenviando (intento ${pass}/3)…`);
+        for (const it of items.filter((x) => bad.includes(x.name))) { await driveUpload(folder, it.name, it.mime, it.blob); say("↻ " + it.name); }
+      }
       say("Envío completo ✔"); say("Si lo necesitas, aún puedes bajar los archivos con los botones de abajo.");
-      $("#closeMsg").textContent = "Jornada cerrada y enviada a Drive.";
+      $("#closeMsg").textContent = verified ? "Jornada cerrada, enviada y verificada en Drive." : "Jornada cerrada y enviada a Drive (sin verificación).";
     } else {
       say("Drive no configurado: use «Compartir» para enviarlos manualmente.");
       $("#closeMsg").textContent = "Jornada cerrada. Si no ves los archivos en Descargas, pulsa los botones de abajo ANTES de cerrar esta ventana.";
