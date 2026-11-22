@@ -38,6 +38,7 @@ const CONFIG = {
 
   /* ---------- Monitor (monitor.html) ---------- */
   MONITOR_POLL_SEC: 15,                 // Cada cuántos segundos se refresca el mapa
+  MONITOR_HIDE_HOURS: 6,                // Horas sin reportar tras las cuales el verificador desaparece del mapa y de la lista
   MONITOR_LOGO:     "logo-vivir.png",   // Logo del panel del monitor
   KML_LOCAL:        "zonas_verificacion.kml", // Respaldo: exporta tu mapa de My Maps a KML y súbelo con este nombre
   MAP_CENTER: [19.72, -98.97], MAP_ZOOM: 12,
