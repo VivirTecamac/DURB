@@ -136,7 +136,7 @@ const accLayer = L.featureGroup();
 /* ---- Puntos de logística + pestaña Rutas ---- */
 const navUrl = (p) => `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving`;
 (CONFIG.LOGISTICA || []).forEach((p) => {
-  L.marker([p.lat, p.lng], { icon: L.divIcon({ className: "", html: '<div class="flag">🚚</div>', iconSize: [22, 22], iconAnchor: [11, 11] }) })
+  L.marker([p.lat, p.lng], { icon: L.divIcon({ className: "", html: '<div class="flag">📌</div>', iconSize: [22, 22], iconAnchor: [11, 11] }) })
     .bindPopup(`<b>${esc(p.name)}</b><br><a href="${navUrl(p)}" target="_blank" rel="noopener">Iniciar navegación ➔</a>`).addTo(logLayer);
 });
 $("#rutas").innerHTML = (CONFIG.LOGISTICA || []).map((p) =>
