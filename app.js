@@ -544,8 +544,10 @@ async function driveUpload(folder, fileName, mimeType, blob) {
   throw lastErr;
 }
 // Pregunta al receptor qué archivos de la lista faltan o están incompletos en Drive. null = receptor sin verificación (versión vieja)
+let lastVerifyReply = null;
 async function driveVerify(folder, files) {
   const j = await driveCall({ action: "verify", folder, files });
+  lastVerifyReply = j;
   if (!j.ok) { if (/Tipo de archivo|Nombre de archivo|Carpeta no v/i.test(j.error || "")) return null; throw new Error(j.error || "Error al verificar"); }
   return [...(j.missing || []), ...(j.bad || [])];
 }
@@ -608,7 +610,12 @@ async function closeJornada() {
       let verified = false;
       for (let pass = 1; ; pass++) {
         const bad = await driveVerify(folder, items.map(({ name, size }) => ({ name, size })));
-        if (bad === null) { say("⚠ El receptor de Google no tiene verificación: pega el nuevo drive-receptor.gs y publica una Nueva versión."); break; }
+        if (bad === null) {
+          say("⚠ No se pudo verificar: Google sigue ejecutando una versión VIEJA del receptor.");
+          say(`   Respuesta recibida: ${JSON.stringify(lastVerifyReply).slice(0, 140)}`);
+          say("   Solución: en Apps Script → Implementar → Administrar implementaciones → ✏️ → Versión: «Nueva versión» → Implementar. Luego abre la URL /exec en el navegador: debe mostrar «version».");
+          break;
+        }
         if (!bad.length) { say(`✔ Verificado: ${items.length} de ${items.length} archivos están completos en Drive`); verified = true; break; }
         say(`⚠ Faltan o están incompletos ${bad.length}: ${bad.slice(0, 4).join(", ")}${bad.length > 4 ? "…" : ""}`);
         if (pass > 3) throw new Error(`No se pudieron verificar ${bad.length} archivo(s) en Drive. La jornada sigue abierta: reintenta el cierre con buena señal.`);

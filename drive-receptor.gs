@@ -20,6 +20,10 @@ const MONITOR_TOKEN = "VelsantMonitor2026";
 // compartido como "Cualquier persona con el enlace" (igual que para incrustarlo).
 const KML_MAP_ID = "1GIz2dXEl-IxBvFGsPTf0fCWlTdyNsec";
 
+// Versión de ESTE código. Se muestra al abrir la URL /exec en el navegador y en cada respuesta,
+// así puedes comprobar que Google ya ejecuta la versión nueva.
+const RECEPTOR_VERSION = "2026-11-23-v5-verificacion";
+
 const MIMES = ["application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "image/jpeg", "application/zip"];
 const POS_PREFIX = "pos_";
 const POS_MAX_AGE_MS = 12 * 3600 * 1000;   // si un verificador olvida cerrar jornada, a las 12 h sin reportar se borra solo
@@ -83,7 +87,7 @@ function doGet(e) {
     if (p.token !== MONITOR_TOKEN) return out({ ok: false, error: "Clave de monitoreo incorrecta" });
     return out(p.action === "positions" ? { ok: true, now: Date.now(), items: readPositions() } : getKml());
   }
-  return out({ ok: true, mensaje: "Receptor activo" });   // prueba rápida desde el navegador
+  return out({ ok: true, mensaje: "Receptor activo", version: RECEPTOR_VERSION });   // prueba rápida desde el navegador
 }
 
 function readPositions() {
@@ -113,6 +117,7 @@ function getOrCreate(parent, name) {
   return it.hasNext() ? it.next() : parent.createFolder(name);
 }
 function out(o) {
+  o.v = RECEPTOR_VERSION;
   return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON);
 }
 
