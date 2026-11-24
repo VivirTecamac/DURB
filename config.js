@@ -23,7 +23,8 @@ const CONFIG = {
   // Mientras esté vacío, el cierre de jornada guarda los archivos en el teléfono
   // y ofrece "Compartir" para mandarlos a Drive manualmente.
 
-  DRIVE_UPLOAD_URL: "https://script.google.com/macros/s/AKfycbzhi7U_FqlmCF4YVpXlMp1vGoevcXPHBa8N5P2_8o4m-Zv6oifch-CPO6y7YdvgVdFo/exec",
+  DRIVE_UPLOAD_URL: "https://script.google.com/macros/s/AKfycbwTY3wEozwiRQBtzds-i2Ch4IL3b-_72axSn5wQgWDqLjMZcYYLjmKlg_qq0sn4wiOK/exec",
+   
 
   DRIVE_TOKEN:  "VelsantCenso2026_Seguridad",          // Debe ser igual al TOKEN de drive-receptor.gs
   DRIVE_FOLDER: "Proyecto Crecimiento Estructural", // Carpeta raíz en Drive (se crea sola)
