@@ -410,7 +410,7 @@ async function saveRecord() {
   btn.disabled = true;
   const jornada = S.jornada || today();
   const photos = d.photos.map((p, i) => ({ name: `${d.clave}_${i + 1}.jpg`, clave: d.clave, blob: p.blob, uploaded: false }));
-  const rec = { clave: d.clave, values, jornada, savedAt: new Date().toISOString(), photos: photos.map((p) => p.name) };
+  const rec = { clave: d.clave, values, verifier: S.verifier.name, jornada, savedAt: new Date().toISOString(), photos: photos.map((p) => p.name) };
   const m = d.clave.match(/(\d+)$/); const counters = { ...S.counters, [S.verifier.initials]: Math.max(S.counters[S.verifier.initials] || 0, m ? +m[1] : 0) };
   try {
     await new Promise((res, rej) => {
@@ -518,7 +518,17 @@ function download(blob, name) {
   setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 60000);
 }
 const fileBase = (suffix = "") => `${S.verifier.initials}_${S.jornada || today()}${suffix}`;
-const rowsOf = (recs) => recs.map((r) => r.values);
+// Columna final con el nombre del verificador (solo en los archivos exportados; no es un campo del formulario).
+// Si el Excel ya trae una columna con ese encabezado, se llena esa en lugar de agregar otra.
+const whoName = () => CONFIG.VERIFIER_COLUMN || "VERIFICADOR";
+const whoIdx = () => S.columns.findIndex((h) => h && normH(h) === normH(whoName()));
+const xcols = () => (CONFIG.VERIFIER_COLUMN === "" || whoIdx() >= 0 ? S.columns : [...S.columns, whoName()]);
+const rowsOf = (recs) => recs.map((r) => {
+  const v = r.values.slice(), who = r.verifier || S.verifier?.name || "", k = whoIdx();
+  if (CONFIG.VERIFIER_COLUMN === "") return v;
+  if (k >= 0) { if (!v[k]) v[k] = who; } else { while (v.length < S.columns.length) v.push(""); v[S.columns.length] = who; }
+  return v;
+});
 
 function blobToB64(blob) { return new Promise((res, rej) => { const fr = new FileReader(); fr.onload = () => res(String(fr.result).split(",")[1]); fr.onerror = () => rej(fr.error); fr.readAsDataURL(blob); }); }
 async function driveCall(payload) {
@@ -568,7 +578,7 @@ async function closeJornada() {
   try {
     const n = (S.closed[S.jornada] || 0);
     const base = fileBase(n ? `_${n + 1}` : "");
-    const xlsx = buildXlsx(S.columns, rowsOf(recs));
+    const xlsx = buildXlsx(xcols(), rowsOf(recs));
     const allPh = await dbAll("photos"); const set = new Set(recs.map((r) => r.clave));
     const photos = allPh.filter((p) => set.has(p.clave)).sort((a, b) => a.name.localeCompare(b.name));
     say(`Archivo: ${base}.xlsx (${recs.length} registros)`); say(`Fotografías: ${photos.length}`);
@@ -658,7 +668,7 @@ async function purgeClosed() {
   if (!orphan.length) return 0;
   const groups = {}; orphan.forEach((r) => (groups[r.jornada] ||= []).push(r));
   const t = db.transaction(["records", "photos", "archive"], "readwrite");
-  Object.keys(groups).forEach((j) => t.objectStore("archive").put({ name: `${S.verifier.initials}_${j}_recuperado.xlsx`, blob: buildXlsx(S.columns, rowsOf(groups[j])), savedAt: new Date().toISOString() }));
+  Object.keys(groups).forEach((j) => t.objectStore("archive").put({ name: `${S.verifier.initials}_${j}_recuperado.xlsx`, blob: buildXlsx(xcols(), rowsOf(groups[j])), savedAt: new Date().toISOString() }));
   orphan.forEach((r) => { t.objectStore("records").delete(r.clave); r.photos.forEach((n) => t.objectStore("photos").delete(n)); });
   await new Promise((res, rej) => { t.oncomplete = res; t.onerror = t.onabort = () => rej(t.error); });
   S.records = S.records.filter((r) => r.jornada === S.jornada);
@@ -706,7 +716,7 @@ function initSettings() {
   };
   const exp = (recs, kind, name) => {
     if (!recs.length) return toast("No hay registros para exportar", "err");
-    download(kind === "csv" ? buildCsv(S.columns, rowsOf(recs)) : buildXlsx(S.columns, rowsOf(recs)), name);
+    download(kind === "csv" ? buildCsv(xcols(), rowsOf(recs)) : buildXlsx(xcols(), rowsOf(recs)), name);
   };
   $("#cfgXlsx").onclick = () => exp(jornadaRecords(), "xlsx", fileBase() + ".xlsx");
   $("#cfgCsv").onclick = () => exp(jornadaRecords(), "csv", fileBase() + ".csv");
@@ -721,7 +731,7 @@ function initSettings() {
     for (const a of await dbAll("archive")) files.push({ name: "Excel/" + a.name, data: await u8(a.blob) });
     const groups = {}; S.records.forEach((r) => (groups[r.jornada] ||= []).push(r));
     for (const j of Object.keys(groups))
-      files.push({ name: `Excel/${S.verifier.initials}_${j}_${j === S.jornada ? "EN_CURSO" : "EN_APP"}.xlsx`, data: await u8(buildXlsx(S.columns, rowsOf(groups[j]))) });
+      files.push({ name: `Excel/${S.verifier.initials}_${j}_${j === S.jornada ? "EN_CURSO" : "EN_APP"}.xlsx`, data: await u8(buildXlsx(xcols(), rowsOf(groups[j]))) });
     for (const p of await dbAll("photos")) files.push({ name: "Fotos/" + p.name, data: await u8(p.blob) });
     if (!files.length) return toast("No hay archivos para descargar", "err");
     download(zipStore(files), `${S.verifier.initials}_TODO_${today()}.zip`); toast(`ZIP con ${files.length} archivo(s)`, "ok");
