@@ -23,7 +23,7 @@ const CONFIG = {
   // Mientras esté vacío, el cierre de jornada guarda los archivos en el teléfono
   // y ofrece "Compartir" para mandarlos a Drive manualmente.
 
-  DRIVE_UPLOAD_URL: "https://script.google.com/macros/s/AKfycbwTY3wEozwiRQBtzds-i2Ch4IL3b-_72axSn5wQgWDqLjMZcYYLjmKlg_qq0sn4wiOK/exec",
+  DRIVE_UPLOAD_URL: "https://script.google.com/macros/s/AKfycbzhi7U_FqlmCF4YVpXlMp1vGoevcXPHBa8N5P2_8o4m-Zv6oifch-CPO6y7YdvgVdFo/exec",
 
   DRIVE_TOKEN:  "VelsantCenso2026_Seguridad",          // Debe ser igual al TOKEN de drive-receptor.gs
   DRIVE_FOLDER: "Proyecto Crecimiento Estructural", // Carpeta raíz en Drive (se crea sola)
@@ -34,6 +34,7 @@ const CONFIG = {
   TRACKING_ENABLED:     true,
   TRACK_INTERVAL_SEC:   60,    // Cada cuántos segundos se envía la posición (30 a 120 recomendado)
   // El verificador NO puede pausar el envío: la ubicación se comparte desde que abre la app hasta que cierra su jornada.
+  TRACK_BACKGROUND_AUDIO: true, // Audio silencioso para que el teléfono no suspenda la app con la pantalla apagada
   TRACK_KEEP_SCREEN_ON: true,  // Mantiene la pantalla encendida para no perder la señal (gasta más batería)
 
   /* ---------- Monitor (monitor.html) ---------- */

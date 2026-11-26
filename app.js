@@ -446,7 +446,7 @@ async function showRecord(clave) {
 /* ------------------------------------------------------------------ */
 /*  Seguimiento en tiempo real (lo ve monitor.html)                    */
 /* ------------------------------------------------------------------ */
-const T = { on: false, watch: null, timer: null, wake: null, last: null, lastSent: 0, err: null, sentOk: null, errMsg: "" };
+const T = { on: false, watch: null, timer: null, dog: null, audio: null, lastFixAt: 0, wake: null, last: null, lastSent: 0, err: null, sentOk: null, errMsg: "" };
 const trackAvailable = () => CONFIG.TRACKING_ENABLED && !!CONFIG.DRIVE_UPLOAD_URL && !!navigator.geolocation;
 
 async function sendPing(status) {
@@ -471,27 +471,56 @@ async function sendPing(status) {
 async function keepAwake() {
   try {
     if (CONFIG.TRACK_KEEP_SCREEN_ON && T.on && "wakeLock" in navigator && !T.wake) {
-      T.wake = await navigator.wakeLock.request("screen"); T.wake.addEventListener("release", () => (T.wake = null));
+      T.wake = await navigator.wakeLock.request("screen");
+      T.wake.addEventListener("release", () => { T.wake = null; if (T.on && document.visibilityState === "visible") setTimeout(keepAwake, 500); });
     }
+  } catch {}
+}
+// Vigilancia continua del GPS: si el navegador detiene el "watch" (error, timeout, suspensión), se reinicia solo.
+function startWatch() {
+  if (T.watch != null) { try { navigator.geolocation.clearWatch(T.watch); } catch {} T.watch = null; }
+  T.watch = navigator.geolocation.watchPosition(onFix, (e) => {
+    T.err = e; updateTrackUI();
+    if (e.code !== 1) { setTimeout(() => { if (T.on) startWatch(); }, 5000); }   // 1 = permiso denegado; lo demás se reintenta
+  }, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
+}
+function onFix(p) {
+  const first = !T.last; T.err = null; T.lastFixAt = Date.now();
+  T.last = { lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), acc: Math.round(p.coords.accuracy) };
+  if (first) sendPing("on"); updateTrackUI();
+}
+// Audio silencioso en bucle: ayuda a que Android/Chrome no congele la página cuando la pantalla se apaga o se cambia de app.
+function startKeepAlive() {
+  if (CONFIG.TRACK_BACKGROUND_AUDIO === false || T.audio) return;
+  try {
+    const n = 8000, b = new DataView(new ArrayBuffer(44 + n)), s = (o, t) => [...t].forEach((c, i) => b.setUint8(o + i, c.charCodeAt(0)));
+    s(0, "RIFF"); b.setUint32(4, 36 + n, true); s(8, "WAVEfmt "); b.setUint32(16, 16, true); b.setUint16(20, 1, true); b.setUint16(22, 1, true);
+    b.setUint32(24, 8000, true); b.setUint32(28, 8000, true); b.setUint16(32, 1, true); b.setUint16(34, 8, true); s(36, "data"); b.setUint32(40, n, true);
+    for (let i = 0; i < n; i++) b.setUint8(44 + i, 128);
+    const au = new Audio(URL.createObjectURL(new Blob([b], { type: "audio/wav" }))); au.loop = true; au.volume = 0.01;
+    au.play().then(() => (T.audio = au)).catch(() => {});
   } catch {}
 }
 function startTracking() {
   if (T.on || !trackAvailable() || !S.verifier) return;
   T.on = true; S.tracking = true; dbPut("meta", true, "tracking");
-  T.watch = navigator.geolocation.watchPosition((p) => {
-    const first = !T.last; T.err = null;
-    T.last = { lat: +p.coords.latitude.toFixed(6), lng: +p.coords.longitude.toFixed(6), acc: Math.round(p.coords.accuracy) };
-    if (first) sendPing("on"); updateTrackUI();
-  }, (e) => { T.err = e; updateTrackUI(); }, { enableHighAccuracy: true, maximumAge: 15000, timeout: 30000 });
+  startWatch();
   T.timer = setInterval(() => sendPing("on"), Math.max(15, CONFIG.TRACK_INTERVAL_SEC) * 1000);
-  keepAwake(); updateTrackUI();
+  // Perro guardián: si pasan 2 min sin fix nuevo, reinicia el GPS y pide una lectura directa
+  T.dog = setInterval(() => {
+    if (!T.on || Date.now() - T.lastFixAt < 120000) return;
+    startWatch(); keepAwake();
+    navigator.geolocation.getCurrentPosition(onFix, () => {}, { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 });
+  }, 30000);
+  keepAwake(); startKeepAlive(); updateTrackUI();
 }
 const autoTrack = () => { if (!T.on && S.trackStopDay !== today()) startTracking(); };
 async function stopTracking() {
   if (!T.on) return;
-  navigator.geolocation.clearWatch(T.watch); clearInterval(T.timer); T.on = false; S.tracking = false;
+  navigator.geolocation.clearWatch(T.watch); T.watch = null; clearInterval(T.timer); clearInterval(T.dog); T.on = false; S.tracking = false;
   await dbPut("meta", false, "tracking"); S.trackStopDay = today(); await dbPut("meta", S.trackStopDay, "trackStopDay");
   try { await T.wake?.release(); } catch {} T.wake = null;
+  try { T.audio?.pause(); } catch {} T.audio = null;
   await sendPing("off"); T.last = null; updateTrackUI();
 }
 function updateTrackUI() {
@@ -508,7 +537,13 @@ function updateTrackUI() {
     : T.errMsg ? "⚠ No se pudo enviar: " + T.errMsg
     : T.lastSent ? "Último envío: " + new Date(T.lastSent).toTimeString().slice(0, 5) : "Obteniendo señal GPS…";
 }
-document.addEventListener("visibilitychange", () => { if (document.visibilityState === "visible" && T.on) { keepAwake(); sendPing("on"); } });
+document.addEventListener("visibilitychange", () => {
+  if (!T.on) return;
+  if (document.visibilityState === "visible") { keepAwake(); startWatch(); sendPing("on"); } else sendPing("on");
+});
+window.addEventListener("online", () => { if (T.on) sendPing("on"); });
+// El audio solo puede arrancar tras un toque del usuario: se arranca con el primer toque en la app
+document.addEventListener("pointerdown", () => { if (T.on && !T.audio) startKeepAlive(); }, { passive: true });
 
 /* ------------------------------------------------------------------ */
 /*  Descargas, Drive y cierre de jornada                               */
