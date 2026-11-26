@@ -32,10 +32,10 @@ const CONFIG = {
   // Requiere DRIVE_UPLOAD_URL. El verificador comparte su ubicación SOLO mientras su jornada está iniciada
   // y la app está abierta; al cerrar la jornada se detiene. Avísales: es un monitoreo laboral.
   TRACKING_ENABLED:     true,
-  TRACK_INTERVAL_SEC:   60,    // Cada cuántos segundos se envía la posición (30 a 120 recomendado)
+  TRACK_INTERVAL_SEC:   120,    // Cada cuántos segundos se envía la posición (30 a 120 recomendado)
   // El verificador NO puede pausar el envío: la ubicación se comparte desde que abre la app hasta que cierra su jornada.
   TRACK_BACKGROUND_AUDIO: true, // Audio silencioso para que el teléfono no suspenda la app con la pantalla apagada
-  TRACK_KEEP_SCREEN_ON: true,  // Mantiene la pantalla encendida para no perder la señal (gasta más batería)
+  TRACK_KEEP_SCREEN_ON: false,  // Mantiene la pantalla encendida para no perder la señal (gasta más batería)
 
   /* ---------- Monitor (monitor.html) ---------- */
   MONITOR_POLL_SEC: 15,                 // Cada cuántos segundos se refresca el mapa
