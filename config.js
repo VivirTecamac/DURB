@@ -56,6 +56,7 @@ const CONFIG = {
     { name: "LOGISTICA 007", lat: 19.749803, lng: -98.941806 },
     { name: "LOGISTICA 008", lat: 19.752472, lng: -98.947217 },
     { name: "LOGISTICA 009", lat: 19.771008, lng: -99.008100 },
+    { name: "LOGISTICA 010", lat: 19.676129, lng: -98.985132 },
   ],
 
   /* ---------- Reglas de captura ---------- */
