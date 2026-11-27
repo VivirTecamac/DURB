@@ -56,7 +56,6 @@ const CONFIG = {
     { name: "LOGISTICA 007", lat: 19.749803, lng: -98.941806 },
     { name: "LOGISTICA 008", lat: 19.752472, lng: -98.947217 },
     { name: "LOGISTICA 009", lat: 19.771008, lng: -99.008100 },
-    { name: "LOGISTICA 010", lat: 19.676129, lng: -98.985132 },
   ],
 
   /* ---------- Reglas de captura ---------- */
@@ -75,6 +74,7 @@ const CONFIG = {
   GPS_OFFLINE_SECONDS: 45,        // Botón «Sin señal»: máximo de segundos buscando satélites
   GPS_OFFLINE_GOOD_METERS: 10,     // ...y se detiene antes si logra esta precisión (metros)
   FOLIO_DIGITS:    3,      // JSG001 -> 3 dígitos
+  ALLOW_MANUAL_COORDS: true, // Si el teléfono NO puede dar ubicación, permite escribir la coordenada a mano (último recurso). false = desactivar
   REQUIRE_COORDS:  true,   // Obligar a tomar la coordenada antes de guardar
   REQUIRE_PHOTO:   true,   // Obligar al menos una foto antes de guardar
   REQUIRE_ALL_FIELDS: false, // true = todos los campos de texto son obligatorios

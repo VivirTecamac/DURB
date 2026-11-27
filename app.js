@@ -303,7 +303,9 @@ function openForm() {
   html += `<label class="f"><span>${esc(S.columns[0])} (automática)</span><div class="lock"><input id="fClave" readonly value="${esc(S.draft.clave)}" aria-readonly="true"><span aria-hidden="true">🔒</span></div></label>`;
   html += `<div class="f"><span class="lbl">${esc(S.columns[1])}</span><div class="coordbox" id="coordBox"><div class="val" id="coordVal">Sin capturar</div><div class="muted" id="coordAcc"></div>
     <div class="gpsrow"><button type="button" class="btn small" id="btnGps">📍 Tomar coordenada de mi ubicación</button>
-    <button type="button" class="btn small alt" id="btnGpsOff">🛰 Sin señal (sin internet)</button></div></div></div>`;
+    <button type="button" class="btn small alt" id="btnGpsOff">🛰 Sin señal (sin internet)</button></div>
+    ${CONFIG.ALLOW_MANUAL_COORDS !== false ? '<button type="button" class="btn small alt" id="btnManual" style="margin-top:8px;width:100%">✍ Escribir coordenada manualmente</button>' : ""}
+    <button type="button" class="btn small alt" id="btnGeoHelp2" style="margin-top:8px;width:100%">❓ ¿No funciona la ubicación? Ver ayuda</button></div></div>`;
   S.columns.slice(2).forEach((h, i) => {
     if (!h) return;   // columna en blanco del Excel: se conserva en el archivo exportado pero no se captura
     const t = typeOf(h), idx = i + 2, req = isRequired(h) ? " *" : "";
@@ -320,7 +322,7 @@ function openForm() {
     <button type="button" class="btn alt small" id="btnPhoto">📷 Tomar foto</button>
     <div class="thumbs" id="thumbs"></div></div>`;
   f.innerHTML = html;
-  $("#btnGps").onclick = captureGps; $("#btnGpsOff").onclick = captureGpsOffline;
+  $("#btnGps").onclick = captureGps; $("#btnGpsOff").onclick = captureGpsOffline; $("#btnGeoHelp2").onclick = () => openGeoHelp(); if ($("#btnManual")) $("#btnManual").onclick = () => openGeoHelp(null, true);
   $("#btnPhoto").onclick = () => $("#fPhoto").click();
   $("#fPhoto").onchange = addPhoto;
   show("form");
@@ -339,14 +341,64 @@ function applyFix(p, modo) {
   $("#coordAcc").textContent = `Precisión aproximada: ±${S.draft.acc} m · ${modo}` + (S.draft.acc > 50 ? " — precisión baja: repite la captura a cielo abierto" : "");
   $("#coordBox").classList.add("ok");
 }
+/* ---------- Ayuda para activar la ubicación en cualquier teléfono / navegador ---------- */
+function envInfo() {
+  const ua = navigator.userAgent || "";
+  const ios = /iPhone|iPad|iPod/.test(ua) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const android = /Android/i.test(ua);
+  const inApp = /FBAN|FBAV|Instagram|Line\/|MicroMessenger|TikTok|Snapchat|Messenger|; wv\)|GSA\//i.test(ua) || (ios && !/Safari\//.test(ua));
+  const br = /SamsungBrowser/i.test(ua) ? "samsung" : /Firefox|FxiOS/i.test(ua) ? "firefox" : /EdgA|EdgiOS|Edg\//.test(ua) ? "edge" : /OPR|Opera/i.test(ua) ? "opera"
+    : /CriOS|Chrome/i.test(ua) ? "chrome" : /Safari/i.test(ua) ? "safari" : "otro";
+  return { ios, android, inApp, br };
+}
+async function permState() { try { return (await navigator.permissions.query({ name: "geolocation" })).state; } catch { return "desconocido"; } }
+async function openGeoHelp(err, onlyManual) {
+  if (onlyManual) { $("#geoBody").innerHTML = ""; $("#geoManual").hidden = false; $("#geoManualIn").value = ""; if (!$("#dlgGeo").open) $("#dlgGeo").showModal(); setTimeout(() => $("#geoManualIn").focus(), 80); return; }
+  const e = envInfo(), st = await permState(), items = [];
+  if (!window.isSecureContext) items.push("🔒 La página se abrió sin conexión segura. Ábrela con la dirección que empieza con <b>https://</b>.");
+  if (!navigator.geolocation) items.push("Este navegador no ofrece ubicación. Abre el enlace en <b>Chrome</b> (Android) o <b>Safari</b> (iPhone).");
+  if (e.inApp) items.push("📲 Estás en un navegador <b>incrustado</b> (WhatsApp, Facebook, correo…) que bloquea la ubicación. Toca <b>⋮ / compartir → «Abrir en Chrome / Safari»</b>, o pulsa <b>Copiar enlace</b> y pégalo en Chrome o Safari.");
+  items.push("📡 Activa la <b>ubicación del teléfono</b> (el interruptor «Ubicación» / GPS del panel rápido) y ponla en <b>alta precisión</b>.");
+  if (e.android) {
+    items.push(`🔐 Permiso del sitio: toca el <b>candado 🔒 / ⓘ</b> junto a la dirección → <b>Permisos</b> → <b>Ubicación → Permitir</b>. Si no aparece: <b>Ajustes del teléfono → Apps → ${e.br === "samsung" ? "Samsung Internet" : e.br === "firefox" ? "Firefox" : "Chrome"} → Permisos → Ubicación → «Permitir» y «Usar ubicación precisa»</b>.`);
+    items.push("🔋 Quita el ahorro de batería para el navegador (Ajustes → Batería → Sin restricciones) para que no se corte con la pantalla apagada.");
+  } else if (e.ios) {
+    items.push("🔐 <b>Ajustes → Privacidad y seguridad → Localización → activada</b>. Luego <b>Safari (o tu navegador) → «Al usar la app»</b> y activa <b>Ubicación precisa</b>.");
+    items.push("En Safari: botón <b>aA</b> junto a la dirección → <b>Ajustes del sitio web → Ubicación → Permitir</b>. Después recarga la página.");
+  } else items.push("🔐 Toca el candado junto a la dirección → Permisos → Ubicación → Permitir, y recarga la página.");
+  if (st === "denied" || err?.code === 1) items.unshift("⛔ El permiso está <b>bloqueado</b>. El navegador ya no vuelve a preguntar: debes permitirlo manualmente (pasos de abajo) y luego pulsar «Reintentar».");
+  if (st === "prompt" && err?.code !== 1) items.unshift("Cuando el navegador pregunte «¿Permitir ubicación?», elige <b>Permitir</b>.");
+  if (err?.code === 2) items.unshift("El teléfono no pudo determinar la posición. Sal a un lugar abierto y revisa que el GPS esté encendido.");
+  $("#geoBody").innerHTML = `<p class="muted" style="margin:0 0 8px">${e.ios ? "iPhone" : e.android ? "Android" : "Dispositivo"} · ${e.br}${e.inApp ? " (incrustado)" : ""} · permiso: ${st}</p><ol style="padding-left:18px;margin:0">${items.map((t) => `<li style="margin-bottom:8px">${t}</li>`).join("")}</ol>`;
+  $("#geoManual").hidden = !(CONFIG.ALLOW_MANUAL_COORDS !== false && S.draft && $("#coordVal"));
+  if (!$("#dlgGeo").open) $("#dlgGeo").showModal();
+}
+function setupGeoHelp() {
+  $("#geoClose").onclick = () => $("#dlgGeo").close();
+  $("#geoRetry").onclick = () => {
+    navigator.geolocation?.getCurrentPosition((p) => { $("#dlgGeo").close(); toast("✔ Ubicación activada", "ok"); if (S.draft && $("#coordVal")) applyFix(p, "Con red"); if (T.on) { onFix(p); startWatch(); } else autoTrack(); },
+      (er) => { toast(gpsError(er), "err"); openGeoHelp(er); }, { enableHighAccuracy: true, timeout: 20000, maximumAge: 0 });
+  };
+  $("#geoCopy").onclick = async () => { try { await navigator.clipboard.writeText(location.href); toast("Enlace copiado: pégalo en Chrome o Safari", "ok"); } catch { prompt("Copia este enlace:", location.href); } };
+  $("#geoManualOk").onclick = () => {
+    const m = $("#geoManualIn").value.match(/(-?\d{1,2}(?:\.\d+)?)\s*[,; ]\s*(-?\d{1,3}(?:\.\d+)?)/);
+    if (!m || Math.abs(+m[1]) > 90 || Math.abs(+m[2]) > 180) return toast("Escribe la coordenada como: 19.720000, -98.970000", "err");
+    S.draft.coords = `${(+m[1]).toFixed(6)},${(+m[2]).toFixed(6)}`; S.draft.acc = null;
+    $("#coordVal").textContent = `${(+m[1]).toFixed(6)}, ${(+m[2]).toFixed(6)}`; $("#coordAcc").textContent = "Escrita manualmente"; $("#coordBox").classList.add("ok");
+    $("#dlgGeo").close(); toast("Coordenada guardada", "ok");
+  };
+  $("#btnGeoHelp1").onclick = () => openGeoHelp(T.err);
+  $("#btnGeoHelp2")?.addEventListener("click", () => openGeoHelp());
+}
+
 const gpsError = (err) => err.code === 1 ? "Permiso de ubicación denegado. Actívalo en los ajustes del navegador para este sitio."
   : err.code === 2 ? "Señal satelital no disponible. Aléjate de techos y árboles densos." : "Tiempo agotado. Intenta de nuevo bajo cielo despejado.";
 
 function captureGps() {
-  if (!navigator.geolocation) return toast("Este dispositivo no tiene GPS disponible", "err");
+  if (!navigator.geolocation) { toast("Este navegador no ofrece GPS", "err"); return openGeoHelp(); }
   gpsBusy(true); $("#btnGps").textContent = "Buscando señal GPS…";
   navigator.geolocation.getCurrentPosition((p) => { applyFix(p, navigator.onLine ? "Con red" : "Sin internet (satélite)"); gpsBusy(false); },
-    (err) => { gpsBusy(false); toast(gpsError(err), "err"); }, { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 });
+    (err) => { gpsBusy(false); toast(gpsError(err), "err"); if (err.code === 1 || err.code === 2) openGeoHelp(err); }, { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 });
 }
 
 /* Modo SIN SEÑAL: usa solo el chip GPS satelital y espera hasta GPS_OFFLINE_SECONDS segundos (sin internet el
@@ -481,6 +533,7 @@ function startWatch() {
   if (T.watch != null) { try { navigator.geolocation.clearWatch(T.watch); } catch {} T.watch = null; }
   T.watch = navigator.geolocation.watchPosition(onFix, (e) => {
     T.err = e; updateTrackUI();
+    if (e.code === 1 && !T.helped) { T.helped = true; openGeoHelp(e); }
     if (e.code !== 1) { setTimeout(() => { if (T.on) startWatch(); }, 5000); }   // 1 = permiso denegado; lo demás se reintenta
   }, { enableHighAccuracy: true, maximumAge: 0, timeout: 30000 });
 }
@@ -526,7 +579,7 @@ async function stopTracking() {
 function updateTrackUI() {
   const c = $("#trackCard"); if (!c) return; c.hidden = !trackAvailable(); if (c.hidden) return;
   const st = $("#trackState"), sub = $("#trackSub"), b = $("#btnTrack");
-  b.hidden = true;
+  b.hidden = true; const hb = $("#btnGeoHelp1"); if (hb) hb.hidden = !(T.err || (!T.on && S.trackStopDay !== today()));
   if (!T.on) {
     const closed = S.trackStopDay === today();
     st.textContent = closed ? "📡 Jornada cerrada: ubicación detenida" : "📡 Ubicación NO compartida";
@@ -791,7 +844,8 @@ async function boot() {
   initSettings();
   $("#btnNew").onclick = openForm; $("#btnList").onclick = openList; $("#btnListBack").onclick = goHome; $("#btnClose").onclick = closeJornada;
   $("#btnSave").onclick = saveRecord;
-  $("#btnTrack").onclick = () => { T.err = null; startTracking(); };   // no hay botón para pausar: solo se detiene al cerrar la jornada
+  $("#btnTrack").onclick = () => { T.err = null; startTracking(); if (!navigator.geolocation || !window.isSecureContext) openGeoHelp(); };
+  setupGeoHelp();   // no hay botón para pausar: solo se detiene al cerrar la jornada
   $("#btnCancel").onclick = () => { if (!formDirty() || confirm("¿Descartar este registro? Se perderán los datos capturados.")) closeForm(); };
 
   if (!S.columns.length || !S.verifier) initSetup(); else { goHome(); autoTrack(); }

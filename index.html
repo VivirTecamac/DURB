@@ -131,7 +131,7 @@ pre.log{background:#241a1d;color:#e9ddd6;font:.8rem/1.45 ui-monospace,Menlo,mono
       </div>
       <p class="muted" style="margin:12px 0 0">Próxima clave: <b id="stNext"></b></p>
     </div>
-    <div class="card" id="trackCard" hidden><b id="trackState"></b><p class="muted" id="trackSub" style="margin:4px 0 0"></p><button class="btn alt" id="btnTrack"></button></div>
+    <div class="card" id="trackCard" hidden><b id="trackState"></b><p class="muted" id="trackSub" style="margin:4px 0 0"></p><button class="btn alt" id="btnTrack"></button><button class="btn small alt" id="btnGeoHelp1" type="button" style="margin-top:8px" hidden>¿No funciona la ubicación? Ver ayuda</button></div>
     <button class="btn" id="btnNew" style="font-size:1.1rem;padding:18px">＋ Nuevo registro</button>
     <button class="btn alt" id="btnList">Ver registros</button>
     <button class="btn dark" id="btnClose">Cierre de jornada</button>
@@ -164,6 +164,15 @@ pre.log{background:#241a1d;color:#e9ddd6;font:.8rem/1.45 ui-monospace,Menlo,mono
 </div></dialog>
 
 <!-- Ajustes -->
+<dialog id="dlgGeo"><div class="in">
+  <h3>📍 Activar la ubicación</h3>
+  <div id="geoBody"></div>
+  <div id="geoManual" hidden style="margin-top:12px"><b>Último recurso: escribir la coordenada</b>
+    <p class="muted" style="margin:4px 0">Cópiala de Google Maps (mantén presionado el punto → toca los números) y pégala aquí.</p>
+    <input id="geoManualIn" placeholder="19.720000, -98.970000" inputmode="text" style="width:100%"><button class="btn small alt" id="geoManualOk" type="button" style="margin-top:8px">Usar esta coordenada</button></div>
+  <div class="gpsrow" style="margin-top:14px"><button class="btn small" id="geoRetry" type="button">🔄 Reintentar</button><button class="btn small alt" id="geoCopy" type="button">🔗 Copiar enlace</button></div>
+  <button class="btn dark" id="geoClose" type="button" style="margin-top:10px">Cerrar</button>
+</div></dialog>
 <dialog id="dlgSet"><div class="in">
   <h3>Ajustes</h3>
   <label class="f"><span>Nombre del verificador</span><input id="cfgName"></label>
