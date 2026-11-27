@@ -71,6 +71,8 @@ const CONFIG = {
   DATE_FORMAT: "DD/MM/YYYY",       // Tokens: DD MM YYYY
   TIME_FORMAT: "HH:mm",            // Tokens: HH mm ss  (24 horas)
 
+  GPS_SECONDS: 25,                // Botón «Tomar coordenada»: máximo de segundos buscando la mejor lectura
+  GPS_GOOD_METERS: 10,            // ...y se detiene antes si logra esta precisión (metros)
   GPS_OFFLINE_SECONDS: 45,        // Botón «Sin señal»: máximo de segundos buscando satélites
   GPS_OFFLINE_GOOD_METERS: 10,     // ...y se detiene antes si logra esta precisión (metros)
   FOLIO_DIGITS:    3,      // JSG001 -> 3 dígitos

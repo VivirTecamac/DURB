@@ -394,36 +394,37 @@ function setupGeoHelp() {
 const gpsError = (err) => err.code === 1 ? "Permiso de ubicación denegado. Actívalo en los ajustes del navegador para este sitio."
   : err.code === 2 ? "Señal satelital no disponible. Aléjate de techos y árboles densos." : "Tiempo agotado. Intenta de nuevo bajo cielo despejado.";
 
-function captureGps() {
+/* Toma la MEJOR lectura de un periodo (no la primera): se queda con la de menor error y se detiene antes
+   si ya alcanzó la precisión buscada. Sirve igual con nubes, calles angostas o cerca de edificios. */
+function captureBest({ btn, seconds, good, modo, icon }) {
   if (!navigator.geolocation) { toast("Este navegador no ofrece GPS", "err"); return openGeoHelp(); }
-  gpsBusy(true); $("#btnGps").textContent = "Buscando señal GPS…";
-  navigator.geolocation.getCurrentPosition((p) => { applyFix(p, navigator.onLine ? "Con red" : "Sin internet (satélite)"); gpsBusy(false); },
-    (err) => { gpsBusy(false); toast(gpsError(err), "err"); if (err.code === 1 || err.code === 2) openGeoHelp(err); }, { enableHighAccuracy: true, timeout: 25000, maximumAge: 0 });
-}
-
-/* Modo SIN SEÑAL: usa solo el chip GPS satelital y espera hasta GPS_OFFLINE_SECONDS segundos (sin internet el
-   primer punto tarda más). Se queda con el punto más preciso que logre y lo guarda en el campo de coordenada. */
-function captureGpsOffline() {
-  if (!navigator.geolocation) return toast("Este dispositivo no tiene GPS disponible", "err");
-  const maxMs = (CONFIG.GPS_OFFLINE_SECONDS || 45) * 1000, good = CONFIG.GPS_OFFLINE_GOOD_METERS || 10, t0 = Date.now();
+  const maxMs = seconds * 1000, t0 = Date.now();
   let best = null, lastErr = null, done = false, id = null, tick = null;
-  gpsBusy(true); $("#coordAcc").textContent = "Buscando satélites… mantente quieto en el terreno.";
+  gpsBusy(true); $("#coordAcc").textContent = "Buscando satélites… mantente quieto un momento.";
   const finish = () => {
     if (done) return; done = true; navigator.geolocation.clearWatch(id); clearInterval(tick); gpsBusy(false);
-    if (best) { applyFix(best, "Sin señal (GPS satelital)"); toast("Coordenada guardada", "ok"); }
-    else { $("#coordAcc").textContent = ""; toast(lastErr ? gpsError(lastErr) : "No se obtuvo señal GPS. Intenta de nuevo bajo cielo despejado.", "err"); }
+    if (best) { applyFix(best, modo); toast("Coordenada guardada", "ok"); }
+    else {
+      $("#coordAcc").textContent = ""; toast(lastErr ? gpsError(lastErr) : "No se obtuvo señal GPS. Intenta de nuevo bajo cielo despejado.", "err");
+      if (lastErr && (lastErr.code === 1 || lastErr.code === 2)) openGeoHelp(lastErr); else if (!lastErr) openGeoHelp();
+    }
   };
   id = navigator.geolocation.watchPosition((p) => {
     if (!best || p.coords.accuracy < best.coords.accuracy) best = p;
     if (p.coords.accuracy <= good) finish();
   }, (err) => { lastErr = err; if (err.code === 1) finish(); },   // permiso denegado: se corta; otros errores se siguen intentando
-  { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 });
+  { enableHighAccuracy: true, timeout: 30000, maximumAge: 0 });   // maximumAge 0: nunca una lectura vieja
   tick = setInterval(() => {
     const s = Math.max(0, Math.round((maxMs - (Date.now() - t0)) / 1000));
-    $("#btnGpsOff").textContent = `🛰 Buscando… ${s} s` + (best ? ` (±${Math.round(best.coords.accuracy)} m)` : "");
+    $(btn).textContent = `${icon} Buscando… ${s} s` + (best ? ` (±${Math.round(best.coords.accuracy)} m)` : "");
     if (Date.now() - t0 >= maxMs) finish();
   }, 500);
 }
+const captureGps = () => captureBest({ btn: "#btnGps", icon: "📍", seconds: CONFIG.GPS_SECONDS || 25, good: CONFIG.GPS_GOOD_METERS || 10, modo: navigator.onLine ? "Con red" : "Sin internet (satélite)" });
+
+/* Modo SIN SEÑAL: usa solo el chip GPS satelital y espera hasta GPS_OFFLINE_SECONDS segundos (sin internet el
+   primer punto tarda más). Se queda con el punto más preciso que logre y lo guarda en el campo de coordenada. */
+const captureGpsOffline = () => captureBest({ btn: "#btnGpsOff", icon: "🛰", seconds: CONFIG.GPS_OFFLINE_SECONDS || 45, good: CONFIG.GPS_OFFLINE_GOOD_METERS || 10, modo: "Sin señal (GPS satelital)" });
 
 async function shrink(file) {
   const bmp = await createImageBitmap(file, { imageOrientation: "from-image" }).catch(() => null);
