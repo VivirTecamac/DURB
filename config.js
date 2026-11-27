@@ -32,10 +32,10 @@ const CONFIG = {
   // Requiere DRIVE_UPLOAD_URL. El verificador comparte su ubicación SOLO mientras su jornada está iniciada
   // y la app está abierta; al cerrar la jornada se detiene. Avísales: es un monitoreo laboral.
   TRACKING_ENABLED:     true,
-  TRACK_INTERVAL_SEC:   120,    // Cada cuántos segundos se envía la posición (30 a 120 recomendado)
+  TRACK_INTERVAL_SEC:   60,    // Cada cuántos segundos se envía la posición (30 a 120 recomendado)
   // El verificador NO puede pausar el envío: la ubicación se comparte desde que abre la app hasta que cierra su jornada.
   TRACK_BACKGROUND_AUDIO: true, // Audio silencioso para que el teléfono no suspenda la app con la pantalla apagada
-  TRACK_KEEP_SCREEN_ON: false,  // Mantiene la pantalla encendida para no perder la señal (gasta más batería)
+  TRACK_KEEP_SCREEN_ON: true,  // Mantiene la pantalla encendida para no perder la señal (gasta más batería)
 
   /* ---------- Monitor (monitor.html) ---------- */
   MONITOR_POLL_SEC: 15,                 // Cada cuántos segundos se refresca el mapa
@@ -44,6 +44,8 @@ const CONFIG = {
   KML_LOCAL:        "zonas_verificacion.kml", // Respaldo: exporta tu mapa de My Maps a KML y súbelo con este nombre
   MAP_CENTER: [19.72, -98.97], MAP_ZOOM: 12,
   // Puntos de logística (los de tu panel de rutas). Se muestran en el mapa y en la pestaña "Rutas".
+  // Campos opcionales por punto:  desc: "texto descriptivo"   url: "liga de Google Maps con la ruta"
+  // Ejemplo: { name: "LOGISTICA 001", lat: 19.68, lng: -98.95, desc: "Bodega norte, portón azul", url: "https://maps.app.goo.gl/XXXX" },
   LOGISTICA: [
     { name: "LOGISTICA 001", lat: 19.685622, lng: -98.958736 },
     { name: "LOGISTICA 002", lat: 19.667297, lng: -98.968458 },

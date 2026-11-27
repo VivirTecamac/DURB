@@ -66,9 +66,9 @@ button.b{font:inherit;font-size:.74rem;font-weight:bold;padding:8px 10px;border-
   <div class="head">
     <img id="logo" alt="Logo">
     <div class="t">
-      <p class="l1">DIRECCIÓN GENERAL DE DESARROLLO TERRITORIAL Y GESTIÓN DE RIESGOS</p>
-      <p class="l2">MUNICIPIO TECÁMAC</p>
-      <h1>📡 Monitoreo de verificadores</h1>
+      <p class="l1">Empresa de Participación Mayoritaria</p>
+      <p class="l2">VIVIR TECÁMAC S.A. de C.V.</p>
+      <h1>📡 Monitor de verificadores</h1>
     </div>
   </div>
   <div class="status"><span id="stTime">Conectando…</span><span id="stCount"></span></div>
@@ -134,13 +134,14 @@ const trailLayer = L.featureGroup();
 const accLayer = L.featureGroup();
 
 /* ---- Puntos de logística + pestaña Rutas ---- */
-const navUrl = (p) => `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving`;
+// Si el punto trae `url` (liga de Google Maps con la ruta) se usa esa; si no, se navega a sus coordenadas.
+const navUrl = (p) => p.url || `https://www.google.com/maps/dir/?api=1&destination=${p.lat},${p.lng}&travelmode=driving`;
 (CONFIG.LOGISTICA || []).forEach((p) => {
-  L.marker([p.lat, p.lng], { icon: L.divIcon({ className: "", html: '<div class="flag">📌</div>', iconSize: [22, 22], iconAnchor: [11, 11] }) })
-    .bindPopup(`<b>${esc(p.name)}</b><br><a href="${navUrl(p)}" target="_blank" rel="noopener">Iniciar navegación ➔</a>`).addTo(logLayer);
+  L.marker([p.lat, p.lng], { icon: L.divIcon({ className: "", html: '<div class="flag">🚚</div>', iconSize: [22, 22], iconAnchor: [11, 11] }) })
+    .bindPopup(`<b>${esc(p.name)}</b>${p.desc ? `<br>${esc(p.desc)}` : ""}<br><a href="${navUrl(p)}" target="_blank" rel="noopener">Iniciar navegación ➔</a>`).addTo(logLayer);
 });
 $("#rutas").innerHTML = (CONFIG.LOGISTICA || []).map((p) =>
-  `<a class="btn-ruta" href="${navUrl(p)}" target="_blank" rel="noopener"><div>${esc(p.name)}<small>Iniciar navegación GPS</small></div><span>➔</span></a>`).join("");
+  `<a class="btn-ruta" href="${navUrl(p)}" target="_blank" rel="noopener"><div>${esc(p.name)}<small>${p.desc ? esc(p.desc) : "Iniciar navegación GPS"}</small></div><span>➔</span></a>`).join("");
 
 /* ============================ KML (zonas) ========================== */
 function kmlColor(c) {   // KML usa aabbggrr
