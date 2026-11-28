@@ -89,7 +89,7 @@ const CONFIG = {
      Por defecto todo es texto. Usa el ENCABEZADO EXACTO de la columna del Excel.
      Tipos: "text", "textarea", "number", "date", "tel", "select"                */
   FIELD_TYPES: {
-    "NARRACIÓN OBJETIVA DE HECHOS Y MOTIVOS:": "textarea",   // cuadro de texto grande
+    // Los tipos de campo ahora se editan en campos.js (este bloque queda como respaldo)
     // "CAMPO 04": "number",
     // "CAMPO 05": "textarea",
     // "CAMPO 06": "select",

@@ -278,8 +278,12 @@ async function goHome() {
 /*  Formulario                                                         */
 /* ------------------------------------------------------------------ */
 const key = (h) => String(h).trim().toUpperCase();
-const typeOf = (h) => { const k = Object.keys(CONFIG.FIELD_TYPES).find((x) => key(x) === key(h)); return k ? CONFIG.FIELD_TYPES[k] : "text"; };
-const optsOf = (h) => { const k = Object.keys(CONFIG.FIELD_OPTIONS).find((x) => key(x) === key(h)); return k ? CONFIG.FIELD_OPTIONS[k] : []; };
+const TIPOS = { texto: "text", area: "textarea", numero: "number", fecha: "date", telefono: "tel", lista: "select", combo: "combo" };
+const campoDef = (h) => (typeof CAMPOS !== "undefined" ? CAMPOS : []).find((c) => key(c.campo) === key(h));
+const typeOf = (h) => { const c = campoDef(h); if (c) return TIPOS[c.tipo] || c.tipo || "text"; return typeOfCfg(h); };
+const typeOfCfg = (h) => { const k = Object.keys(CONFIG.FIELD_TYPES).find((x) => key(x) === key(h)); return k ? CONFIG.FIELD_TYPES[k] : "text"; };
+const optsOf = (h) => { const c = campoDef(h); if (c) return c.opciones || []; return optsOfCfg(h); };
+const optsOfCfg = (h) => { const k = Object.keys(CONFIG.FIELD_OPTIONS).find((x) => key(x) === key(h)); return k ? CONFIG.FIELD_OPTIONS[k] : []; };
 const isRequired = (h) => CONFIG.REQUIRE_ALL_FIELDS || CONFIG.REQUIRED_FIELDS.some((x) => key(x) === key(h));
 
 /* ---- Campos automáticos por nombre de columna (FECHA, HORA, CONCLUYE (HR)) ---- */
@@ -312,6 +316,10 @@ function openForm() {
     const ak = autoKind(h); if (ak) { html += autoFieldHtml(h, idx, ak); return; }
     let inp;
     if (t === "textarea") inp = `<textarea data-i="${idx}"></textarea>`;
+    else if (t === "combo") {
+      html += `<div class="f"><span class="lbl">${esc(h)}${req}</span><select data-combo="${idx}"><option value="">— Selecciona —</option>${optsOf(h).map((o) => `<option>${esc(o)}</option>`).join("")}<option value="__otro">✍ Otro (escribir)…</option></select>
+        <input data-i="${idx}" type="text" hidden placeholder="Escribe aquí" autocapitalize="sentences" style="margin-top:8px"></div>`; return;
+    }
     else if (t === "select") inp = `<select data-i="${idx}"><option value="">— Selecciona —</option>${optsOf(h).map((o) => `<option>${esc(o)}</option>`).join("")}</select>`;
     else inp = `<input data-i="${idx}" type="${["number", "date", "tel"].includes(t) ? t : "text"}" ${t === "number" ? 'inputmode="decimal" step="any"' : ""} autocapitalize="sentences">`;
     html += `<label class="f"><span>${esc(h)}${req}</span>${inp}</label>`;
@@ -323,6 +331,13 @@ function openForm() {
     <div class="thumbs" id="thumbs"></div></div>`;
   f.innerHTML = html;
   $("#btnGps").onclick = captureGps; $("#btnGpsOff").onclick = captureGpsOffline; $("#btnGeoHelp2").onclick = () => openGeoHelp(); if ($("#btnManual")) $("#btnManual").onclick = () => openGeoHelp(null, true);
+  f.querySelectorAll("select[data-combo]").forEach((sel) => {
+    const inp = f.querySelector(`input[data-i="${sel.dataset.combo}"]`);
+    sel.onchange = () => {
+      if (sel.value === "__otro") { inp.hidden = false; inp.value = ""; inp.focus(); }
+      else { inp.hidden = true; inp.value = sel.value; }
+    };
+  });
   $("#btnPhoto").onclick = () => $("#fPhoto").click();
   $("#fPhoto").onchange = addPhoto;
   show("form");
